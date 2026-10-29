@@ -1,0 +1,22 @@
+{
+  "name": "tpos-v2-clean-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "check": "node --check src/server.js && node --check src/app.js && node --check src/database.js && node --check src/auth.js && node --check src/tenants.js && node --check src/users.js",
+    "test": "node --test tests/*.test.js",
+    "db:setup": "node scripts/setup-central.js"
+  },
+  "engines": {"node": ">=22"},
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "helmet": "^8.1.0",
+    "mysql2": "^3.15.0",
+    "zod": "^4.1.0"
+  }
+}

@@ -1,0 +1,33 @@
+-- TPOS V2 Clean Rebuild: Tenant Foundation. User tables are NOT in this file.
+CREATE TABLE IF NOT EXISTS company_profiles (
+  id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+  registered_name VARCHAR(220) NOT NULL,
+  trading_name VARCHAR(220) NULL,
+  business_type ENUM('RESTAURANT','GROCERY','RETAIL','MINI_MARKET','CAFE','FOOD_TRUCK','STREET_FOOD') NOT NULL,
+  phone VARCHAR(40) NULL,
+  email VARCHAR(254) NOT NULL,
+  address_line1 VARCHAR(255) NOT NULL,
+  address_line2 VARCHAR(255) NULL,
+  city VARCHAR(120) NOT NULL,
+  postcode VARCHAR(20) NOT NULL,
+  state VARCHAR(120) NOT NULL,
+  country CHAR(2) NOT NULL DEFAULT 'MY',
+  currency CHAR(3) NOT NULL DEFAULT 'MYR',
+  timezone VARCHAR(64) NOT NULL DEFAULT 'Asia/Kuala_Lumpur',
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE IF NOT EXISTS company_registrations (
+  id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+  ssm_registration_number VARCHAR(100) NOT NULL,
+  ssm_old_registration_number VARCHAR(100) NULL,
+  tin VARCHAR(80) NULL,
+  sst_sales_tax_number VARCHAR(80) NULL,
+  sst_service_tax_number VARCHAR(80) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE IF NOT EXISTS branches (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  code VARCHAR(40) NOT NULL UNIQUE,
+  name VARCHAR(160) NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

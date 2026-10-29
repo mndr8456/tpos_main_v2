@@ -1,0 +1,22 @@
+-- TPOS V2 Clean Rebuild: Central (run only against a NEW database)
+CREATE TABLE IF NOT EXISTS tenants (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  business_name VARCHAR(220) NOT NULL,
+  business_type ENUM('RESTAURANT','GROCERY','RETAIL','MINI_MARKET','CAFE','FOOD_TRUCK','STREET_FOOD') NOT NULL,
+  owner_email VARCHAR(254) NOT NULL UNIQUE,
+  db_name VARCHAR(110) NULL UNIQUE,
+  status ENUM('PROVISIONING','ACTIVE','FAILED','SUSPENDED') NOT NULL DEFAULT 'PROVISIONING',
+  last_error VARCHAR(300) NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  activated_at DATETIME(6) NULL,
+  KEY ix_tenants_status(status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS login_directory (
+  email VARCHAR(254) NOT NULL PRIMARY KEY,
+  tenant_id BIGINT UNSIGNED NOT NULL,
+  tenant_user_id BIGINT UNSIGNED NOT NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  UNIQUE KEY uq_directory_user(tenant_id,tenant_user_id),
+  CONSTRAINT fk_directory_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
