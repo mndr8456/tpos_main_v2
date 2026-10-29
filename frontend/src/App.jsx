@@ -102,12 +102,21 @@ export function App(){
  const [profile,setProfile]=useState(null),[loading,setLoading]=useState(true),[sidebar,setSidebar]=useState(false),[notice,setNotice]=useState({error:'',message:''}),[page,setPage]=useState('users');
  const notify=useCallback((message,error=false)=>setNotice(error?{error:message,message:''}:{error:'',message}),[]);
  useEffect(()=>{request('/auth/me').then(setProfile).catch(()=>{}).finally(()=>setLoading(false));},[]);
+ // Keep the menu open until the hamburger is clicked again, outside is clicked, or Escape is pressed.
+ useEffect(()=>{
+  if(!sidebar)return;
+  const onEscape=e=>{if(e.key==='Escape')setSidebar(false);};
+  window.addEventListener('keydown',onEscape);
+  return ()=>window.removeEventListener('keydown',onEscape);
+ },[sidebar]);
  async function signOut(){try{await request('/auth/logout',{method:'POST',body:{}});}catch{}setProfile(null);setSidebar(false);}
  if(loading)return <div className="loading">Loading TPOS...</div>;
  if(!profile)return <AuthView onAuth={p=>{setProfile(p);setSidebar(false);setNotice({error:'',message:''});}}/>;
  const hasView=profile.user.permissions.includes('users.view');
- return <div className="workspace"><aside className={sidebar?'sidebar open':'sidebar'}><div className="side-brand">TPOS <span>V2</span></div><p className="side-label">WORKSPACE</p><button className={page==='users'?'nav active':'nav'} onClick={()=>{setPage('users');setSidebar(false);}} disabled={!hasView}><Users size={18}/> Users</button></aside>
- <div className="main-column"><header className="topbar"><div className="top-left"><button className="icon-button" aria-label="Toggle sidebar" onClick={()=>setSidebar(v=>!v)}><Menu size={21}/></button><div className="workspace-name"><Building2 size={18}/><div><b>{profile.business.name}</b><small>{profile.user.role} / {profile.business.type||'Business'}</small></div></div></div><div className="top-right"><span>{profile.user.fullName}</span><button className="outline action-icon" title="Sign Out" aria-label="Sign Out" onClick={signOut}><LogOut size={19}/></button></div></header>
+ return <div className="workspace">
+ {sidebar&&<button type="button" className="sidebar-scrim" aria-label="Close navigation" onClick={()=>setSidebar(false)} tabIndex={-1}/>}
+ <aside id="workspace-navigation" aria-label="Workspace navigation" className={sidebar?'sidebar open':'sidebar'}><div className="side-brand">TPOS <span>V2</span></div><p className="side-label">WORKSPACE</p><button className={page==='users'?'nav active':'nav'} onClick={()=>{setPage('users');setSidebar(false);}} disabled={!hasView}><Users size={18}/> Users</button></aside>
+ <div className="main-column"><header className="topbar"><div className="top-left"><button type="button" className="icon-button" aria-label={sidebar?"Close navigation":"Open navigation"} title={sidebar?"Close navigation":"Open navigation"} aria-controls="workspace-navigation" aria-expanded={sidebar} onClick={()=>setSidebar(current=>!current)}><Menu size={21}/></button><div className="workspace-name"><Building2 size={18}/><div><b>{profile.business.name}</b><small>{profile.user.role} / {profile.business.type||'Business'}</small></div></div></div><div className="top-right"><span>{profile.user.fullName}</span><button className="outline action-icon" title="Sign Out" aria-label="Sign Out" onClick={signOut}><LogOut size={19}/></button></div></header>
   <Notice error={notice.error} message={notice.message} onClose={()=>setNotice({error:'',message:''})}/>
   {profile.user.mustChangePassword?<PasswordView onDone={()=>setProfile(null)} notify={notify}/>:hasView?<UsersView profile={profile} notify={notify}/>:<main className="page"><h1>My Account</h1><p>Your account is active. User management requires explicit permission.</p><button className="outline" onClick={signOut}>Sign Out</button></main>}
  <footer className="app-footer">© 2026 TPOS V2 — MNII Alpha Ent</footer>

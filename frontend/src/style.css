@@ -173,3 +173,54 @@
 @media (max-height: 470px) {
   .auth-login { height: auto; min-height: 470px; overflow-y: auto; }
 }
+
+
+/* R7: the blue login panel ends at the user-approved red guideline (55.5%).
+   Preserve R6's 510px sign-in card and the separate registration layout. */
+@media (min-width: 1001px) {
+  .auth-login { grid-template-columns: minmax(0, 55.5%) minmax(0, 44.5%); }
+}
+
+/* R7: workspace navigation floats over content instead of shifting the page.
+   Show on menu hover/focus/tap and auto-hide when leaving the sidebar. */
+.workspace .sidebar {
+  display: block;
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 238px;
+  max-width: min(86vw, 320px);
+  z-index: 41;
+  overflow-y: auto;
+  box-shadow: 12px 0 30px rgba(8, 30, 57, .18);
+  transform: translateX(-103%);
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 170ms ease, visibility 170ms;
+}
+.workspace .sidebar.open {
+  display: block;
+  transform: translateX(0);
+  visibility: visible;
+  pointer-events: auto;
+}
+.workspace .sidebar-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: default;
+}
+@media (max-width: 580px) {
+  .workspace .sidebar.open {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    box-shadow: 12px 0 30px rgba(8, 30, 57, .25);
+  }
+  .workspace .sidebar-scrim { background: rgba(10, 24, 47, .18); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace .sidebar { transition: none; }
+}
