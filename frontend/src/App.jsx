@@ -1,11 +1,19 @@
 import { useCallback,useEffect,useMemo,useState } from 'react';
-import { Menu,Users,Shield,LogOut,Plus,Search,LockKeyhole,UnlockKeyhole,RefreshCw,Download,History,Upload,Pencil,KeyRound, X,Building2,Eye,EyeOff } from 'lucide-react';
+import { Menu,Users,Shield,LogOut,Plus,Search,LockKeyhole,UnlockKeyhole,RefreshCw,Download,History,Upload,Pencil,KeyRound, X,Building2,Eye,EyeOff,LayoutDashboard } from 'lucide-react';
 import { request } from './api.js';
 import UsersImport from './UsersImport.jsx';
+import Categories from './Categories.jsx';
+import Dashboard from './Dashboard.jsx';
+import { Tags,Truck,Package } from 'lucide-react';
+import Suppliers from './Suppliers.jsx';
+import Products from './Products.jsx';
+import Discounts from './Discounts.jsx';
+import { BadgePercent } from 'lucide-react';
 
 const types=['RESTAURANT','GROCERY','RETAIL','MINI_MARKET','CAFE','FOOD_TRUCK','STREET_FOOD'];
 const regFields=[['businessName','Registered Business Name'],['ssmRegistrationNumber','SSM Registration Number'],['ssmOldRegistrationNumber','Old SSM (optional)'],['tin','TIN (optional)'],['sstSalesTaxNumber','SST Number Sales Tax (optional)'],['sstServiceTaxNumber','SST Number Service Tax (optional)'],['phone','Business Phone (optional)'],['addressLine1','Address Line 1'],['addressLine2','Address Line 2 (optional)'],['city','City'],['postcode','Postcode'],['state','State'],['ownerName','Owner Full Name'],['ownerEmail','Owner Email'],['ownerPassword','Owner Password']];
 const initialReg={businessType:'RESTAURANT'};
+const landingPage=profile=>profile?.user?.permissions?.includes('dashboard.view')?'dashboard':profile?.user?.permissions?.includes('users.view')?'users':profile?.user?.permissions?.includes('categories.view')?'categories':'account';
 const initialUser={fullName:'',username:'',email:'',phone:'',role:'CASHIER',branchId:'1',password:'',status:'ACTIVE'};
 function Field({label,value,onChange,type='text',required=false,placeholder='',...rest}){
  return <label className="field"><span>{label}</span><input type={type} value={value ?? ''} onChange={e=>onChange(e.target.value)} required={required} placeholder={placeholder} {...rest}/></label>;
@@ -53,15 +61,27 @@ function UserForm({original,meta,onCancel,onSave,busy}){
  const update=(key,v)=>setForm(s=>({...s,[key]:v}));
  return <div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)onCancel();}}><form className="dialog" onSubmit={e=>{e.preventDefault();onSave(form);}}><div className="dialog-head"><h2>{editing?'Edit User':'Add User'}</h2><button type="button" className="icon-button" onClick={onCancel}><X size={20}/></button></div>
  <div className="form-two"><Field label="Full Name" required value={form.fullName} onChange={v=>update('fullName',v)}/><Field label="Username" required value={form.username} onChange={v=>update('username',v)} placeholder="letters, digits, . _ -"/>
- <Field label="Email" required type="email" disabled={editing} value={form.email} onChange={v=>update('email',v)}/><Field label="Phone (optional)" value={form.phone} onChange={v=>update('phone',v)}/>
+ <Field label="Email" required type="email" value={form.email} onChange={v=>update('email',v)}/><Field label="Phone (optional)" value={form.phone} onChange={v=>update('phone',v)}/>
  <label className="field"><span>Role</span><select value={form.role} onChange={e=>update('role',e.target.value)}>{meta.roles.map(r=><option value={r.code} key={r.code}>{r.name}</option>)}</select></label>
  <label className="field"><span>Branch</span><select value={form.branchId} onChange={e=>update('branchId',e.target.value)}>{meta.branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
  {!editing?<Field label="Temporary Password (12+ characters, letters + numbers)" required type="password" value={form.password} onChange={v=>update('password',v)}/>:<label className="field"><span>Status</span><select value={form.status} onChange={e=>update('status',e.target.value)}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>}</div>
  <div className="dialog-actions"><button type="button" className="outline" onClick={onCancel}>Cancel</button><button className="primary" type="submit" disabled={busy}>{busy?'Saving...':editing?'Save Changes':'Create User'}</button></div></form></div>;
 }
-function UsersView({profile,notify}){
- const [users,setUsers]=useState([]),[meta,setMeta]=useState({roles:[],branches:[]}),[query,setQuery]=useState(''),[filter,setFilter]=useState('ALL'),[editing,setEditing]=useState(undefined),[showImport,setShowImport]=useState(false),[showAudit,setShowAudit]=useState(false),[logs,setLogs]=useState([]),[busy,setBusy]=useState(false),[loading,setLoading]=useState(false);
+function EmailEditor({original,self,busy,onCancel,onSave}){
+ const [email,setEmail]=useState(original.email);
+ const [currentPassword,setCurrentPassword]=useState('');
+ return <div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)onCancel();}}><form className="dialog" onSubmit={e=>{e.preventDefault();onSave({email,currentPassword:self?currentPassword:undefined});}}>
+  <div className="dialog-head"><h2>Change Email</h2><button type="button" className="icon-button" aria-label="Close" onClick={onCancel}><X size={20}/></button></div>
+  <p className="muted">{original.full_name} — Login email. {self?'You will need to sign in again after this change.':'This user will need to sign in again after this change.'}</p>
+  <Field label="Email" required type="email" value={email} onChange={setEmail}/>
+  {self&&<Field label="Current Password" required type="password" autoComplete="current-password" value={currentPassword} onChange={setCurrentPassword}/>}
+  <div className="dialog-actions"><button type="button" className="outline" onClick={onCancel}>Cancel</button><button type="submit" className="primary" disabled={busy}>{busy?'Saving...':'Save Email'}</button></div>
+ </form></div>;
+}
+function UsersView({profile,notify,onAccountEmailChanged}){
+ const [users,setUsers]=useState([]),[meta,setMeta]=useState({roles:[],branches:[]}),[query,setQuery]=useState(''),[filter,setFilter]=useState('ALL'),[editing,setEditing]=useState(undefined),[emailEditing,setEmailEditing]=useState(null),[showImport,setShowImport]=useState(false),[showAudit,setShowAudit]=useState(false),[logs,setLogs]=useState([]),[busy,setBusy]=useState(false),[loading,setLoading]=useState(false);
  const canManage=profile.user.permissions.includes('users.manage');
+ const canEditOthersEmail=['OWNER','ADMIN','HR'].includes(profile.user.role);
  const canAudit=profile.user.permissions.includes('users.audit');
  const load=useCallback(async()=>{setLoading(true);try{const [a,b]=await Promise.all([request('/users'),request('/users/meta')]);setUsers(a.users);setMeta(b);}catch(e){notify(e.message,true);}finally{setLoading(false);}},[notify]);
  useEffect(()=>{load();},[load]);
@@ -74,9 +94,18 @@ function UsersView({profile,notify}){
  async function save(form){setBusy(true);try{
   const edited=editing && editing!=='new';
   const body={fullName:form.fullName,username:form.username,email:form.email,phone:form.phone,role:form.role,branchId:form.branchId,status:form.status,password:form.password};
-  if(edited){delete body.email;delete body.password;await request(`/users/${editing.id}`,{method:'PUT',body});}
+  if(edited){delete body.password;await request(`/users/${editing.id}`,{method:'PUT',body});}
   else {delete body.status;await request('/users',{method:'POST',body});}
   setEditing(undefined);notify(edited?'User updated.':'User created.');await load();
+ }catch(e){notify(e.message,true);}finally{setBusy(false);}}
+ async function saveEmail({email,currentPassword}){setBusy(true);try{
+  const self=String(emailEditing.id)===String(profile.user.id);
+  const payload={email,...(self?{currentPassword}:{})};
+  const result=await request(`/users/${emailEditing.id}/email`,{method:'PATCH',body:payload});
+  setEmailEditing(null);
+  if(result.mustSignInAgain){onAccountEmailChanged();return;}
+  notify(result.message==='EMAIL_UNCHANGED'?'Email unchanged.':'Email updated. The user must sign in again.');
+  await load();
  }catch(e){notify(e.message,true);}finally{setBusy(false);}}
  async function unlock(user){if(!window.confirm(`Unlock ${user.full_name}?`))return;try{await request(`/users/${user.id}/unlock`,{method:'POST',body:{}});notify('Account unlocked.');await load();}catch(e){notify(e.message,true);}}
  async function resetPassword(user){const value=window.prompt(`Enter a new temporary password for ${user.full_name} (12+ characters, letters and numbers):`);if(value===null)return;try{await request(`/users/${user.id}/password-reset`,{method:'POST',body:{password:value}});notify('Password reset. User must change it at next sign-in.');}catch(e){notify(e.message,true);}}
@@ -86,8 +115,9 @@ function UsersView({profile,notify}){
  <div className="table-panel"><div className="tools"><div className="search"><Search size={17}/><input aria-label="Search users" placeholder="Search users, email or role..." value={query} onChange={e=>setQuery(e.target.value)}/></div><select aria-label="Filter users" value={filter} onChange={e=>setFilter(e.target.value)}><option value="ALL">All Status</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option><option value="LOCKED">Locked</option></select><button className="icon-button" title="Refresh" onClick={load} disabled={loading}><RefreshCw size={18}/></button></div>
  <div className="table-scroll"><table><thead><tr>{['#','User','Username','Role','Branch','Status','Last Login','Security','Actions'].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{filtered.map((u,index)=>{
   const locked=u.locked_until&&new Date(u.locked_until.replace(' ','T')+'Z').getTime()>Date.now();
-  return <tr key={u.id}><td>{index+1}</td><td><strong>{u.full_name}</strong><small>{u.email}</small></td><td>{u.username}</td><td>{u.role_code}</td><td>{u.branch_name||'—'}</td><td><span className={`pill ${u.status==='ACTIVE'?'good':'off'}`}>{u.status}</span></td><td>{formatted(u.last_login_at)}</td><td>{locked?<span className="pill warn">LOCKED</span>:u.must_change_password?<span className="pill warn">PASSWORD CHANGE</span>:<span className="pill good">NORMAL</span>}</td><td><div className="row-actions">{canManage&&u.role_code!=='OWNER'&&String(profile.user.id)!==String(u.id)&&<><button aria-label={`Edit ${u.full_name}`} title="Edit User" onClick={()=>setEditing(u)}><Pencil size={16}/></button><button aria-label={`Reset password for ${u.full_name}`} title="Reset Password" onClick={()=>resetPassword(u)}><KeyRound size={16}/></button></>}{canManage&&locked&&<button aria-label={`Unlock ${u.full_name}`} title="Unlock User" onClick={()=>unlock(u)}><UnlockKeyhole size={16}/></button>}</div></td></tr>;
+  return <tr key={u.id}><td>{index+1}</td><td><strong>{u.full_name}</strong><small>{u.email}</small></td><td>{u.username}</td><td>{u.role_code}</td><td>{u.branch_name||'—'}</td><td><span className={`pill ${u.status==='ACTIVE'?'good':'off'}`}>{u.status}</span></td><td>{formatted(u.last_login_at)}</td><td>{locked?<span className="pill warn">LOCKED</span>:u.must_change_password?<span className="pill warn">PASSWORD CHANGE</span>:<span className="pill good">NORMAL</span>}</td><td><div className="row-actions">{canManage&&u.role_code!=='OWNER'&&String(profile.user.id)!==String(u.id)&&<><button aria-label={`Edit ${u.full_name}`} title="Edit User" onClick={()=>setEditing(u)}><Pencil size={16}/></button><button aria-label={`Reset password for ${u.full_name}`} title="Reset Password" onClick={()=>resetPassword(u)}><KeyRound size={16}/></button></>}{(String(profile.user.id)===String(u.id)||(canEditOthersEmail&&u.role_code!=='OWNER'&&!canManage))&&<button aria-label={`Change email for ${u.full_name}`} title="Change Email" onClick={()=>setEmailEditing(u)}><Pencil size={16}/></button>}{canManage&&locked&&<button aria-label={`Unlock ${u.full_name}`} title="Unlock User" onClick={()=>unlock(u)}><UnlockKeyhole size={16}/></button>}</div></td></tr>;
  })}{!filtered.length&&<tr><td colSpan={9} className="empty">{loading?'Loading users...':'No users match your search.'}</td></tr>}</tbody></table></div></div>
+ {emailEditing&&<EmailEditor original={{...emailEditing,email:emailEditing.email,full_name:emailEditing.full_name}} self={String(emailEditing.id)===String(profile.user.id)} busy={busy} onCancel={()=>setEmailEditing(null)} onSave={saveEmail}/>}
  {showImport&&<UsersImport onClose={()=>setShowImport(false)} onImported={async created=>{setShowImport(false);notify(`${created} user(s) imported successfully.`);await load();}}/>}
  {editing&&<UserForm original={editing==='new'?null:editing} meta={meta} busy={busy} onCancel={()=>setEditing(undefined)} onSave={save}/>}
  {showAudit&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setShowAudit(false);}}><div className="dialog wide"><div className="dialog-head"><h2>User Activity Log</h2><button className="icon-button" onClick={()=>setShowAudit(false)}><X size={20}/></button></div><div className="table-scroll"><table><thead><tr><th>Time (UTC)</th><th>Event</th><th>Actor</th><th>User</th></tr></thead><tbody>{logs.map((x,i)=><tr key={i}><td>{formatted(x.created_at)}</td><td>{x.event_type}</td><td>{x.actor_user_id??'—'}</td><td>{x.target_user_id??'—'}</td></tr>)}{!logs.length&&<tr><td colSpan={4}>No activity yet.</td></tr>}</tbody></table></div></div></div>}
@@ -99,9 +129,9 @@ function PasswordView({onDone,notify}){
  return <div className="page"><div className="table-panel narrow"><h2>Change your password</h2><p className="muted">A new password is required before you can access other modules.</p><form className="auth-form" onSubmit={submit}><Field type="password" label="Current Password" required value={current} onChange={setCurrent}/><Field type="password" label="New Password (12+ characters, letters and numbers)" required value={next} onChange={setNext}/><button disabled={busy} type="submit" className="primary">Change Password</button></form></div></div>;
 }
 export function App(){
- const [profile,setProfile]=useState(null),[loading,setLoading]=useState(true),[sidebar,setSidebar]=useState(false),[notice,setNotice]=useState({error:'',message:''}),[page,setPage]=useState('users');
+ const [profile,setProfile]=useState(null),[loading,setLoading]=useState(true),[sidebar,setSidebar]=useState(false),[notice,setNotice]=useState({error:'',message:''}),[page,setPage]=useState('dashboard'),[selfEmailEdit,setSelfEmailEdit]=useState(false),[selfEmailBusy,setSelfEmailBusy]=useState(false);
  const notify=useCallback((message,error=false)=>setNotice(error?{error:message,message:''}:{error:'',message}),[]);
- useEffect(()=>{request('/auth/me').then(setProfile).catch(()=>{}).finally(()=>setLoading(false));},[]);
+ useEffect(()=>{request('/auth/me').then(p=>{setProfile(p);setPage(landingPage(p));}).catch(()=>{}).finally(()=>setLoading(false));},[]);
  // Keep the menu open until the hamburger is clicked again, outside is clicked, or Escape is pressed.
  useEffect(()=>{
   if(!sidebar)return;
@@ -111,14 +141,19 @@ export function App(){
  },[sidebar]);
  async function signOut(){try{await request('/auth/logout',{method:'POST',body:{}});}catch{}setProfile(null);setSidebar(false);}
  if(loading)return <div className="loading">Loading TPOS...</div>;
- if(!profile)return <AuthView onAuth={p=>{setProfile(p);setSidebar(false);setNotice({error:'',message:''});}}/>;
+ if(!profile)return <AuthView onAuth={p=>{setProfile(p);setPage(landingPage(p));setSidebar(false);setNotice({error:'',message:''});}}/>;
+ const canViewDashboard=profile.user.permissions.includes('dashboard.view');
  const hasView=profile.user.permissions.includes('users.view');
+ const canViewCategories=profile.user.permissions.includes('categories.view');
+ const canViewSuppliers=profile.user.permissions.includes('suppliers.view');
+ const canViewProducts=profile.user.permissions.includes('products.view');
+ const canViewDiscounts=profile.user.permissions.includes('discounts.view');
  return <div className="workspace">
  {sidebar&&<button type="button" className="sidebar-scrim" aria-label="Close navigation" onClick={()=>setSidebar(false)} tabIndex={-1}/>}
- <aside id="workspace-navigation" aria-label="Workspace navigation" className={sidebar?'sidebar open':'sidebar'}><div className="side-brand">TPOS <span>V2</span></div><p className="side-label">WORKSPACE</p><button className={page==='users'?'nav active':'nav'} onClick={()=>{setPage('users');setSidebar(false);}} disabled={!hasView}><Users size={18}/> Users</button></aside>
+ <aside id="workspace-navigation" aria-label="Workspace navigation" className={sidebar?'sidebar open':'sidebar'}><div className="side-brand">TPOS <span>V2</span></div><p className="side-label">WORKSPACE</p>{canViewDashboard&&<button className={page==='dashboard'?'nav active':'nav'} onClick={()=>{setPage('dashboard');setSidebar(false);}}><LayoutDashboard size={18}/> Dashboard</button>}<button className={page==='users'?'nav active':'nav'} onClick={()=>{setPage('users');setSidebar(false);}} disabled={!hasView}><Users size={18}/> Users</button><button className={page==='categories'?'nav active':'nav'} onClick={()=>{setPage('categories');setSidebar(false);}} disabled={!canViewCategories}><Tags size={18}/> Categories</button>{canViewSuppliers&&<button className={page==='suppliers'?'nav active':'nav'} onClick={()=>{setPage('suppliers');setSidebar(false);}}><Truck size={18}/> Suppliers</button>}{canViewProducts&&<button className={page==='products'?'nav active':'nav'} onClick={()=>{setPage('products');setSidebar(false);}}><Package size={18}/> Products</button>}{canViewDiscounts&&<button className={page==='discounts'?'nav active':'nav'} onClick={()=>{setPage('discounts');setSidebar(false);}}><BadgePercent size={18}/> Discounts</button>}</aside>
  <div className="main-column"><header className="topbar"><div className="top-left"><button type="button" className="icon-button" aria-label={sidebar?"Close navigation":"Open navigation"} title={sidebar?"Close navigation":"Open navigation"} aria-controls="workspace-navigation" aria-expanded={sidebar} onClick={()=>setSidebar(current=>!current)}><Menu size={21}/></button><div className="workspace-name"><Building2 size={18}/><div><b>{profile.business.name}</b><small>{profile.user.role} / {profile.business.type||'Business'}</small></div></div></div><div className="top-right"><span>{profile.user.fullName}</span><button className="outline action-icon" title="Sign Out" aria-label="Sign Out" onClick={signOut}><LogOut size={19}/></button></div></header>
   <Notice error={notice.error} message={notice.message} onClose={()=>setNotice({error:'',message:''})}/>
-  {profile.user.mustChangePassword?<PasswordView onDone={()=>setProfile(null)} notify={notify}/>:hasView?<UsersView profile={profile} notify={notify}/>:<main className="page"><h1>My Account</h1><p>Your account is active. User management requires explicit permission.</p><button className="outline" onClick={signOut}>Sign Out</button></main>}
+  {profile.user.mustChangePassword?<PasswordView onDone={()=>setProfile(null)} notify={notify}/>:page==='dashboard'&&canViewDashboard?<Dashboard profile={profile} onNavigate={next=>{setPage(next);setSidebar(false);}}/>:page==='categories'&&canViewCategories?<Categories profile={profile} notify={notify}/>:page==='suppliers'&&canViewSuppliers?<Suppliers profile={profile} notify={notify}/>:page==='products'&&canViewProducts?<Products profile={profile} notify={notify}/>:page==='discounts'&&canViewDiscounts?<Discounts profile={profile} notify={notify}/>:hasView?<UsersView profile={profile} notify={notify} onAccountEmailChanged={()=>{setProfile(null);setSidebar(false);notify('Email changed. Sign in again using the new email.');}}/>:<main className="page"><h1>My Account</h1><p>Your account is active. User management requires explicit permission.</p><p>Login Email: {profile.user.email}</p><button className="outline" onClick={()=>setSelfEmailEdit(true)}>Change Email</button>{selfEmailEdit&&<EmailEditor original={{id:profile.user.id,email:profile.user.email,full_name:profile.user.fullName}} self={true} busy={selfEmailBusy} onCancel={()=>setSelfEmailEdit(false)} onSave={async data=>{setSelfEmailBusy(true);try{const result=await request(`/users/${profile.user.id}/email`,{method:'PATCH',body:data});setSelfEmailEdit(false);if(result.mustSignInAgain){setProfile(null);notify('Email changed. Sign in again using the new email.');}else notify('Email unchanged.');}catch(e){notify(e.message,true);}finally{setSelfEmailBusy(false);}}}/>}</main>}
  <footer className="app-footer">© 2026 TPOS V2 — MNII Alpha Ent</footer>
  </div></div>;
 }

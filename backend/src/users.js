@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import { centralPool } from './database.js';
+import { centralPool, quoteIdentifier } from './database.js';
+import { settings } from './config.js';
+import { verifyPassword } from './passwords.js';
 import { hashPassword } from './passwords.js';
 
 const roleCodes=['ADMIN','HR','ACCOUNTANT','MANAGER','SUPERVISOR','CASHIER','WAITER','KITCHEN','STAFF'];
@@ -10,7 +12,8 @@ const createSchema=z.object({
 }).strict();
 const updateSchema=z.object({
  fullName:z.string().trim().min(2).max(160),username:z.string().trim().regex(/^[a-zA-Z0-9._-]{3,60}$/), phone:z.string().trim().max(40).optional().default(''),
- role:z.enum(roleCodes), branchId:z.coerce.number().int().positive(),status:z.enum(['ACTIVE','INACTIVE'])
+ role:z.enum(roleCodes), branchId:z.coerce.number().int().positive(),status:z.enum(['ACTIVE','INACTIVE']),
+ email:z.email().max(254).transform(v=>v.trim().toLowerCase()).optional()
 }).strict();
 export async function userMeta(req,res){
  const [roles]=await req.auth.pool.execute('SELECT code,name FROM roles ORDER BY id');
@@ -37,6 +40,52 @@ async function validBranch(conn,id){
  const [[b]]=await conn.execute('SELECT id FROM branches WHERE id=? AND is_active=1 LIMIT 1',[id]);
  if(!b)throw Object.assign(new Error('INVALID_BRANCH'),{status:400});
 }
+// All schema updates use the SAME MySQL connection and transaction. This ensures
+// tenant users and the central login directory cannot diverge on a normal failure.
+const centralDirectory = `${quoteIdentifier(settings.central)}.login_directory`;
+const centralTenants = `${quoteIdentifier(settings.central)}.tenants`;
+const emailSchema=z.object({email:z.email().max(254).transform(v=>v.trim().toLowerCase()),currentPassword:z.string().min(1).optional()}).strict();
+const emailAdminRoles=new Set(['OWNER','ADMIN','HR']);
+
+async function changeEmailWithinTransaction(conn,{tenantId,targetId,targetEmail,newEmail,actorId,targetRole}){
+ if(targetEmail===newEmail)return false;
+ const [[record]]=await conn.execute(`SELECT email FROM ${centralDirectory} WHERE tenant_id=? AND tenant_user_id=? FOR UPDATE`,[tenantId,targetId]);
+ if(!record || record.email!==targetEmail)throw Object.assign(new Error('LOGIN_DIRECTORY_OUT_OF_SYNC'),{status:409});
+ // Database unique constraints reject an address already in use (even in another tenant).
+ const [directoryUpdate]=await conn.execute(`UPDATE ${centralDirectory} SET email=? WHERE tenant_id=? AND tenant_user_id=? AND email=?`,[newEmail,tenantId,targetId,targetEmail]);
+ if(directoryUpdate.affectedRows!==1)throw Object.assign(new Error('LOGIN_DIRECTORY_OUT_OF_SYNC'),{status:409});
+ await conn.execute('UPDATE users SET email=?,auth_version=auth_version+1 WHERE id=?',[newEmail,targetId]);
+ if(targetRole==='OWNER'){
+  const [ownerUpdate]=await conn.execute(`UPDATE ${centralTenants} SET owner_email=? WHERE id=? AND owner_email=?`,[newEmail,tenantId,targetEmail]);
+  if(ownerUpdate.affectedRows!==1)throw Object.assign(new Error('OWNER_DIRECTORY_OUT_OF_SYNC'),{status:409});
+  await conn.execute('UPDATE company_profiles SET email=? WHERE id=1 AND email=?',[newEmail,targetEmail]);
+ }
+ await conn.execute(`INSERT INTO user_activity_logs(actor_user_id,target_user_id,event_type,details) VALUES(?,?,'USER_EMAIL_CHANGED',JSON_OBJECT('oldEmail',?,'newEmail',?))`,[actorId,targetId,targetEmail,newEmail]);
+ return true;
+}
+
+// Email-only changes are available to the account owner or OWNER/ADMIN/HR.
+// Updating the OWNER account is restricted to the actual OWNER, not HR/ADMIN.
+export async function changeUserEmail(req,res){
+ const data=emailSchema.parse(req.body),{pool,user,tenantId}=req.auth,id=String(req.params.id);
+ if(!/^[1-9]\d*$/.test(id))return res.status(400).json({error:'INVALID_USER_ID'});
+ const self=id===String(user.id);
+ if(!self && !emailAdminRoles.has(user.role_code))return res.status(403).json({error:'EMAIL_EDIT_NOT_ALLOWED'});
+ if(self && !data.currentPassword)return res.status(400).json({error:'CURRENT_PASSWORD_REQUIRED'});
+ const conn=await pool.getConnection();
+ try{
+  await conn.beginTransaction();
+  const [[target]]=await conn.execute(`SELECT u.email,u.password_hash,r.code AS role_code FROM users u JOIN user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id WHERE u.id=? FOR UPDATE`,[id]);
+  if(!target)throw Object.assign(new Error('USER_NOT_FOUND'),{status:404});
+  if(target.role_code==='OWNER' && !self)throw Object.assign(new Error('OWNER_PROTECTED'),{status:403});
+  if(self && !await verifyPassword(data.currentPassword,target.password_hash))throw Object.assign(new Error('WRONG_PASSWORD'),{status:400});
+  const changed=await changeEmailWithinTransaction(conn,{tenantId,targetId:id,targetEmail:target.email,newEmail:data.email,actorId:user.id,targetRole:target.role_code});
+  await conn.commit();
+  return res.json({message:changed?'USER_EMAIL_UPDATED':'EMAIL_UNCHANGED',mustSignInAgain:self&&changed});
+ }catch(error){await conn.rollback();if(error.code==='ER_DUP_ENTRY')return res.status(409).json({error:'EMAIL_ALREADY_REGISTERED'});throw error;}
+ finally{conn.release();}
+}
+
 export async function createUser(req,res){
  const data=createSchema.parse(req.body),{tenantId,pool,user}=req.auth;
  if(user.role_code!=='OWNER'&&!user.branchIds.includes(String(data.branchId)))return res.status(403).json({error:'BRANCH_ACCESS_DENIED'});
@@ -64,14 +113,14 @@ export async function createUser(req,res){
  }finally{conn.release();}
 }
 export async function updateUser(req,res){
- const data=updateSchema.parse(req.body),{pool,user}=req.auth,id=String(req.params.id);
+ const data=updateSchema.parse(req.body),{pool,user,tenantId}=req.auth,id=String(req.params.id);
  if(user.role_code!=='OWNER'&&!user.branchIds.includes(String(data.branchId)))return res.status(403).json({error:'BRANCH_ACCESS_DENIED'});
  if(!/^[1-9]\d*$/.test(id))return res.status(400).json({error:'INVALID_USER_ID'});
  if(id===String(user.id))return res.status(409).json({error:'SELF_ROLE_STATUS_CHANGE_BLOCKED'});
  const conn=await pool.getConnection();
  try{
   await conn.beginTransaction();
-  const [[target]]=await conn.execute(`SELECT r.code,u.status FROM users u JOIN user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id WHERE u.id=? FOR UPDATE`,[id]);
+  const [[target]]=await conn.execute(`SELECT r.code,u.status,u.email FROM users u JOIN user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id WHERE u.id=? FOR UPDATE`,[id]);
   if(!target)throw Object.assign(new Error('USER_NOT_FOUND'),{status:404});
   if(target.code==='OWNER')throw Object.assign(new Error('OWNER_PROTECTED'),{status:403});
   await validBranch(conn,data.branchId);
@@ -81,10 +130,14 @@ export async function updateUser(req,res){
   await conn.execute('INSERT INTO user_roles(user_id,role_id) VALUES(?,?)',[id,role]);
   await conn.execute('DELETE FROM user_branch_access WHERE user_id=?',[id]);
   await conn.execute('INSERT INTO user_branch_access(user_id,branch_id) VALUES(?,?)',[id,data.branchId]);
+  if(data.email!==undefined && data.email!==target.email){
+   if(!['OWNER','ADMIN'].includes(user.role_code))throw Object.assign(new Error('EMAIL_EDIT_NOT_ALLOWED'),{status:403});
+   await changeEmailWithinTransaction(conn,{tenantId,targetId:id,targetEmail:target.email,newEmail:data.email,actorId:user.id,targetRole:target.code});
+  }
   await conn.execute(`INSERT INTO user_activity_logs(actor_user_id,target_user_id,event_type,details) VALUES(?,?,'USER_UPDATED',JSON_OBJECT('role',?,'status',?,'branchId',?))`,
    [user.id,id,data.role,data.status,data.branchId]);
   await conn.commit();return res.json({message:'USER_UPDATED'});
- }catch(e){await conn.rollback();throw e;}finally{conn.release();}
+ }catch(e){await conn.rollback();if(e.code==='ER_DUP_ENTRY')return res.status(409).json({error:'EMAIL_OR_USERNAME_ALREADY_REGISTERED'});throw e;}finally{conn.release();}
 }
 export async function unlockUser(req,res){
  const {pool,user}=req.auth,id=String(req.params.id);

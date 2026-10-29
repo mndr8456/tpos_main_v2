@@ -54,6 +54,12 @@ export async function registerTenant(request,response) {
   await adminPool().query(`CREATE DATABASE ${quoteIdentifier(dbName)} CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci`);
   await executeSchema(dbName,'002_tenant_foundation.sql');
   await executeSchema(dbName,'003_tenant_users.sql');
+  await executeSchema(dbName,'004_tenant_categories.sql');
+  await executeSchema(dbName,'005_tenant_dashboard.sql');
+  await executeSchema(dbName,'006_tenant_suppliers.sql');
+  await executeSchema(dbName,'007_tenant_products.sql');
+  await executeSchema(dbName,'008_tenant_product_r3.sql');
+  await executeSchema(dbName,'009_tenant_discounts.sql');
   const userId=await seedProfile({id},data,passwordHash);
   await cp.execute('INSERT INTO login_directory(email,tenant_id,tenant_user_id) VALUES(?,?,?)',[data.ownerEmail,id,userId]);
   await cp.execute(`UPDATE tenants SET status='ACTIVE',activated_at=UTC_TIMESTAMP(6) WHERE id=?`,[id]);
