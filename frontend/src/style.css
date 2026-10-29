@@ -18,3 +18,158 @@
 .import-error{color:#ae352c;font-size:12px}
 .import-ok{color:#25714f;font-size:12px}
 @media(max-width:580px){.app-footer{padding:18px 12px}.actions .action-icon{width:42px;height:42px;padding:0}}
+
+
+/* R6: fixed desktop login viewport; registration keeps its own scrollable document. */
+.auth-login {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+.auth-login .welcome {
+  min-height: 0;
+  padding: clamp(24px, 3.2vh, 48px) clamp(30px, 4.4vw, 72px);
+  overflow: hidden;
+}
+.auth-login .welcome .eyebrow {
+  margin-top: clamp(20px, 3.8vh, 38px);
+  margin-bottom: 14px;
+}
+.auth-login .welcome h1 {
+  font-size: clamp(38px, 4.3vw, 60px);
+  line-height: 1.045;
+  letter-spacing: -2.2px;
+  margin-bottom: 16px;
+}
+.auth-login .welcome > p:not(.eyebrow) {
+  font-size: 14px;
+  line-height: 1.55;
+  margin-bottom: 0;
+}
+.auth-login .welcome-points {
+  margin-top: clamp(16px, 3vh, 28px);
+  gap: 10px;
+  font-size: 13px;
+}
+.auth-login .auth-panel {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 24px clamp(24px, 3vw, 45px) 62px;
+}
+.auth-login .auth-form {
+  width: min(100%, 510px);
+  padding: clamp(22px, 2.5vw, 34px);
+  background: #fff;
+  border: 1px solid #e0e8f3;
+  border-radius: 18px;
+  box-shadow: 0 14px 42px rgba(20, 49, 93, .07);
+  gap: 14px;
+}
+.auth-login .auth-form h2 {
+  font-size: 25px;
+  line-height: 1.2;
+  margin: 0;
+}
+.auth-login .auth-form .muted {
+  margin: 0 0 3px;
+  line-height: 1.5;
+}
+.auth-login .field input {
+  min-height: 42px;
+}
+.auth-login .password-input input {
+  min-height: 40px;
+}
+.auth-login .auth-form > button.primary {
+  min-height: 44px;
+}
+.auth-footer {
+  color: #71829a;
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.5;
+}
+.auth-login .auth-footer {
+  position: absolute;
+  right: clamp(24px, 3vw, 45px);
+  bottom: 17px;
+  width: min(calc(100% - 48px), 510px);
+}
+.auth-login .notice {
+  position: absolute;
+  top: 16px;
+  right: clamp(24px, 3vw, 45px);
+  width: min(calc(100% - 48px), 510px);
+  margin: 0;
+  z-index: 1;
+}
+.auth-register .auth-footer {
+  width: min(100%, 580px);
+  margin-top: 25px;
+  padding-bottom: 10px;
+}
+/* Keep side-by-side login on smaller laptop screens. */
+@media (min-width: 761px) and (max-width: 1000px) {
+  .auth-login { grid-template-columns: minmax(275px, 40%) minmax(0, 1fr); }
+  .auth-login .welcome { padding: 26px 25px; }
+  .auth-login .welcome .eyebrow,
+  .auth-login .welcome > p:not(.eyebrow),
+  .auth-login .welcome-points { display: initial; }
+  .auth-login .welcome-points { display: grid; }
+  .auth-login .welcome h1 { font-size: clamp(33px, 4vw, 43px); }
+  .auth-login .auth-panel { padding-right: 22px; padding-left: 22px; }
+  .auth-login .auth-form { padding: 25px; }
+}
+@media (max-width: 760px) {
+  .auth-login {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    min-height: 0;
+  }
+  .auth-login .welcome {
+    flex: 0 0 auto;
+    min-height: 0;
+    padding: 15px 24px;
+  }
+  .auth-login .welcome .eyebrow,
+  .auth-login .welcome h1,
+  .auth-login .welcome > p:not(.eyebrow),
+  .auth-login .welcome-points { display: none; }
+  .auth-login .auth-panel {
+    flex: 1;
+    align-items: center;
+    padding: 16px 18px 54px;
+  }
+  .auth-login .auth-form {
+    width: min(100%, 480px);
+    padding: clamp(20px, 5vw, 28px);
+  }
+  .auth-login .auth-footer {
+    left: 0;
+    right: 0;
+    width: 100%;
+    bottom: 12px;
+  }
+  .auth-login .notice {
+    left: 18px;
+    right: 18px;
+    width: auto;
+    top: 12px;
+  }
+}
+/* Very short viewports must remain usable rather than clipping controls. */
+@media (max-height: 525px) and (min-width: 761px) {
+  .auth-login .welcome > p:not(.eyebrow),
+  .auth-login .welcome-points { display: none; }
+  .auth-login .welcome h1 { font-size: 38px; }
+  .auth-login .auth-form { padding: 18px 24px; gap: 10px; }
+  .auth-login .auth-panel { padding-bottom: 40px; }
+  .auth-login .auth-footer { bottom: 8px; }
+}
+@media (max-height: 470px) {
+  .auth-login { height: auto; min-height: 470px; overflow-y: auto; }
+}

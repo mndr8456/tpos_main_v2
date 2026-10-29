@@ -26,7 +26,7 @@ function AuthView({onAuth}){
    window.location.replace('/login?registered=1');
   }
  }catch(e){setError(e.message);}finally{setBusy(false);}}
- return <main className="auth-layout"><section className="welcome"><div className="brand">TPOS <span>V2</span></div><p className="eyebrow">CLEAN REBUILD • FOUNDATION R1</p><h1>One workspace.<br/>Every business.</h1><p>A new tenant-isolated foundation, starting with Users, access controls and an auditable login.</p><div className="welcome-points"><span>Central tenant directory</span><span>Branch-based user access</span><span>Account lockout and audit trail</span></div></section>
+ return <main className={`auth-layout ${isRegistration ? 'auth-register' : 'auth-login'}`}><section className="welcome"><div className="brand">TPOS <span>V2</span></div><p className="eyebrow">CLEAN REBUILD • FOUNDATION R1</p><h1>One workspace.<br/>Every business.</h1><p>A new tenant-isolated foundation, starting with Users, access controls and an auditable login.</p><div className="welcome-points"><span>Central tenant directory</span><span>Branch-based user access</span><span>Account lockout and audit trail</span></div></section>
   <section className="auth-panel">
    <Notice error={error} message={message} onClose={()=>{setError('');setMessage('');}}/>
    <form onSubmit={submit} className="auth-form"><h2>{isRegistration?'New business registration':'Welcome back'}</h2><p className="muted">{isRegistration?'A new tenant database will be created for this business. Administrator authorization is required.':'Sign in using your email. The tenant is detected automatically.'}</p>
@@ -35,6 +35,7 @@ function AuthView({onAuth}){
    <button className="primary" disabled={busy} type="submit">{busy?'Working...':isRegistration?'Create Business & Owner':'Sign In'}</button>
    {isRegistration&&<a className="outline" href="/login">Back to Sign In</a>}
    </form>
+   <footer className="auth-footer">© 2026 TPOS V2 — MNII Alpha Ent</footer>
   </section></main>;
 }
 function exportUsersCsv(users){
