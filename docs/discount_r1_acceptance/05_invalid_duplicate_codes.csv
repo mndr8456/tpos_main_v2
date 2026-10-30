@@ -1,0 +1,3 @@
+﻿"discount_code","discount_name","description","discount_type","discount_scope","discount_value","minimum_spend","maximum_discount_amount","start_date","end_date","usage_limit","sort_order","status","eligibility_type","targets"
+"TDR1DUP","Duplicate code A","PC acceptance test","PERCENTAGE","ORDER","10.00","0.00","","","","","0","ACTIVE","ALL",""
+"tdr1dup","Duplicate code B","PC acceptance test","PERCENTAGE","ORDER","10.00","0.00","","","","","0","ACTIVE","ALL",""

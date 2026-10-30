@@ -1,0 +1,2 @@
+﻿"discount_code","discount_name","description","discount_type","discount_scope","discount_value","minimum_spend","maximum_discount_amount","start_date","end_date","usage_limit","sort_order","status","eligibility_type","targets"
+"TDR1PROD","R1 Product Target","PC acceptance test","PERCENTAGE","ITEM","10.00","0.00","","","","","0","ACTIVE","PRODUCT","PRD-000001"

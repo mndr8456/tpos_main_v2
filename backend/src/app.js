@@ -14,6 +14,9 @@ import { listSuppliers,exportSuppliers,createSupplier,updateSupplier,changeSuppl
 import { supplierCsvTemplate } from './suppliers-csv.js';
 import {listDiscounts,exportDiscounts,discountMeta,createDiscount,updateDiscount,discountStatus,archiveDiscount,discountAudit,previewDiscountImport,importDiscounts,previewDiscountCalculation} from './discounts.js';
 import {discountCsvTemplate} from './discounts-csv.js';
+import {discountOwnerAdminOnly} from './discount-role-guard.js';
+import {voucherOwnerOnly} from './voucher-owner-guard.js';
+import {listVouchers,voucherMeta,createVoucher,updateVoucher,voucherStatus,archiveVoucher,voucherAudit,voucherPrintSettings,saveVoucherPrintSettings,previewVoucher,voucherCsvTemplate,exportVouchers,previewVoucherImport,importVouchers} from './vouchers.js';
 import {listProducts,exportProducts,productMeta,productStructure,createProduct,updateProduct,productStatus,archiveProduct,productAudit,listBranchPrices,saveBranchPrice,previewProductsImport,importProducts,productCsvTemplate,uploadProductImage,readProductImage} from './products.js';
 
 export function createApp(){
@@ -23,6 +26,7 @@ export function createApp(){
  app.use(cors({origin:settings.origin,credentials:true}));
  app.use('/api/v2/products/import',express.json({limit:'24mb'}));
  app.use('/api/v2/discounts/import',express.json({limit:'2mb'}));
+ app.use('/api/v2/vouchers/import',express.json({limit:'2mb'}));
  app.use('/api/v2/products/:id/image',express.json({limit:'3mb'}));
  app.use(express.json({limit:'320kb'}));
  app.use((req,res,next)=>{
@@ -40,18 +44,32 @@ export function createApp(){
  app.post('/api/v2/auth/logout',authenticate,logout);
  app.post('/api/v2/auth/change-password',authenticate,changePassword);
  app.get('/api/v2/dashboard/overview',authenticate,permitted('dashboard.view'),dashboardOverview);
+ app.get('/api/v2/vouchers',authenticate,permitted('vouchers.view'),listVouchers);
+ app.get('/api/v2/vouchers/meta',authenticate,permitted('vouchers.view'),voucherMeta);
+ app.get('/api/v2/vouchers/export',authenticate,permitted('vouchers.manage'),exportVouchers);
+ app.get('/api/v2/vouchers/import/template',authenticate,permitted('vouchers.manage'),(_req,res)=>res.set('Cache-Control','no-store').type('text/csv; charset=utf-8').attachment('vouchers-import-template.csv').send(voucherCsvTemplate()));
+ app.post('/api/v2/vouchers/import/preview',authenticate,permitted('vouchers.manage'),previewVoucherImport);
+ app.post('/api/v2/vouchers/import',authenticate,permitted('vouchers.manage'),importVouchers);
+ app.get('/api/v2/vouchers/print-settings',authenticate,permitted('vouchers.print'),voucherPrintSettings);
+ app.put('/api/v2/vouchers/print-settings',authenticate,permitted('vouchers.print.settings'),voucherOwnerOnly,saveVoucherPrintSettings);
+ app.get('/api/v2/vouchers/audit',authenticate,permitted('vouchers.audit'),voucherAudit);
+ app.post('/api/v2/vouchers/:id/preview',authenticate,permitted('vouchers.manage'),previewVoucher);
+ app.post('/api/v2/vouchers',authenticate,permitted('vouchers.manage'),createVoucher);
+ app.put('/api/v2/vouchers/:id',authenticate,permitted('vouchers.manage'),updateVoucher);
+ app.patch('/api/v2/vouchers/:id/status',authenticate,permitted('vouchers.manage'),voucherStatus);
+ app.delete('/api/v2/vouchers/:id',authenticate,permitted('vouchers.manage'),archiveVoucher);
  app.get('/api/v2/discounts',authenticate,permitted('discounts.view'),listDiscounts);
  app.get('/api/v2/discounts/meta',authenticate,permitted('discounts.view'),discountMeta);
- app.get('/api/v2/discounts/export',authenticate,permitted('discounts.export'),exportDiscounts);
- app.get('/api/v2/discounts/audit',authenticate,permitted('discounts.audit'),discountAudit);
- app.get('/api/v2/discounts/import/template',authenticate,permitted('discounts.import'),(_req,res)=>res.set('Cache-Control','no-store').type('text/csv; charset=utf-8').attachment('discounts-import-template.csv').send(discountCsvTemplate()));
- app.post('/api/v2/discounts/import/preview',authenticate,permitted('discounts.import'),previewDiscountImport);
- app.post('/api/v2/discounts/import',authenticate,permitted('discounts.import'),importDiscounts);
- app.post('/api/v2/discounts/:id/preview-calculation',authenticate,permitted('discounts.view'),previewDiscountCalculation);
- app.post('/api/v2/discounts',authenticate,permitted('discounts.create'),createDiscount);
- app.put('/api/v2/discounts/:id',authenticate,permitted('discounts.update'),updateDiscount);
- app.patch('/api/v2/discounts/:id/status',authenticate,permitted('discounts.update'),discountStatus);
- app.delete('/api/v2/discounts/:id',authenticate,permitted('discounts.delete'),archiveDiscount);
+ app.get('/api/v2/discounts/export',authenticate,permitted('discounts.export'),discountOwnerAdminOnly,exportDiscounts);
+ app.get('/api/v2/discounts/audit',authenticate,permitted('discounts.audit'),discountOwnerAdminOnly,discountAudit);
+ app.get('/api/v2/discounts/import/template',authenticate,permitted('discounts.import'),discountOwnerAdminOnly,(_req,res)=>res.set('Cache-Control','no-store').type('text/csv; charset=utf-8').attachment('discounts-import-template.csv').send(discountCsvTemplate()));
+ app.post('/api/v2/discounts/import/preview',authenticate,permitted('discounts.import'),discountOwnerAdminOnly,previewDiscountImport);
+ app.post('/api/v2/discounts/import',authenticate,permitted('discounts.import'),discountOwnerAdminOnly,importDiscounts);
+ app.post('/api/v2/discounts/:id/preview-calculation',authenticate,permitted('discounts.calculate'),discountOwnerAdminOnly,previewDiscountCalculation);
+ app.post('/api/v2/discounts',authenticate,permitted('discounts.create'),discountOwnerAdminOnly,createDiscount);
+ app.put('/api/v2/discounts/:id',authenticate,permitted('discounts.update'),discountOwnerAdminOnly,updateDiscount);
+ app.patch('/api/v2/discounts/:id/status',authenticate,permitted('discounts.update'),discountOwnerAdminOnly,discountStatus);
+ app.delete('/api/v2/discounts/:id',authenticate,permitted('discounts.delete'),discountOwnerAdminOnly,archiveDiscount);
  app.get('/api/v2/products',authenticate,permitted('products.view'),listProducts);
  app.get('/api/v2/products/meta',authenticate,permitted('products.view'),productMeta);
  app.get('/api/v2/products/export',authenticate,permitted('products.export'),exportProducts);

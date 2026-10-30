@@ -1,0 +1,4 @@
+voucher_code,voucher_name,description,discount_type,discount_value,minimum_spend,maximum_discount,starts_at,ends_at,order_scope,eligibility_type,targets,usage_limit,per_customer_limit,status
+,Voucher RM5,Potongan RM5,FIXED_AMOUNT,5.00,10.00,,1/11/2026 0:00,14/11/2026 23:59,BOTH,ALL,,,1,INACTIVE
+,Voucher RM10,Potongan RM10,FIXED_AMOUNT,10.00,50.00,,1/11/2026 0:00,14/11/2026 23:59,BOTH,ALL,,,1,INACTIVE
+,Voucher RM15,Potongan RM15,FIXED_AMOUNT,15.00,75.00,,1/11/2026 0:00,14/11/2026 23:59,BOTH,ALL,,,1,INACTIVE

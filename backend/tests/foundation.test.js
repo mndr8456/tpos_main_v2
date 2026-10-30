@@ -15,9 +15,9 @@ test('Password hashes use per-user random salt and authenticate correctly',async
 test('Session secret has unpredictable 256-bit tokens and stores only SHA-256 digest',()=>{
  const token=freshToken();assert.match(token,/^[a-zA-Z0-9_-]{43}$/);assert.equal(tokenHash(token).length,64);
 });
-test('Central, tenant foundation, Users, Category, Dashboard, Supplier and Product SQL are eight distinct files',async()=>{
+test('V2 migrations retain original order and keep Discount, Dashboard and Voucher migrations separate',async()=>{
  const names=await readdir(join(root,'database'));
- assert.deepEqual(names.filter(n=>n.endsWith('.sql')).sort(),['001_central.sql','002_tenant_foundation.sql','003_tenant_users.sql','004_tenant_categories.sql','005_tenant_dashboard.sql','006_tenant_suppliers.sql','007_tenant_products.sql','008_tenant_product_r3.sql','009_tenant_discounts.sql']);
+ assert.deepEqual(names.filter(n=>n.endsWith('.sql')).sort(),['001_central.sql','002_tenant_foundation.sql','003_tenant_users.sql','004_tenant_categories.sql','005_tenant_dashboard.sql','006_tenant_suppliers.sql','007_tenant_products.sql','008_tenant_product_r3.sql','009_tenant_discounts.sql','010_tenant_discount_role_permissions.sql','011_tenant_dashboard_accountant_supervisor.sql','012_tenant_vouchers.sql']);
  const base=await source('database/002_tenant_foundation.sql');
  const users=await source('database/003_tenant_users.sql');
  assert.doesNotMatch(base,/CREATE TABLE IF NOT EXISTS users\b/i);
@@ -25,7 +25,7 @@ test('Central, tenant foundation, Users, Category, Dashboard, Supplier and Produ
   assert.match(users,new RegExp(`CREATE TABLE IF NOT EXISTS ${name}\\b`,'i'));
 });
 test('All SQL avoids destructive commands and legacy V1 tables',async()=>{
- for(const name of ['001_central.sql','002_tenant_foundation.sql','003_tenant_users.sql','004_tenant_categories.sql','005_tenant_dashboard.sql','006_tenant_suppliers.sql','007_tenant_products.sql','008_tenant_product_r3.sql','009_tenant_discounts.sql']){
+ for(const name of ['001_central.sql','002_tenant_foundation.sql','003_tenant_users.sql','004_tenant_categories.sql','005_tenant_dashboard.sql','006_tenant_suppliers.sql','007_tenant_products.sql','008_tenant_product_r3.sql','009_tenant_discounts.sql','010_tenant_discount_role_permissions.sql','011_tenant_dashboard_accountant_supervisor.sql','012_tenant_vouchers.sql']){
   const sql=await source(`database/${name}`);
   assert.doesNotMatch(sql,/\bDROP\s+(?:TABLE|DATABASE)\b|\bTRUNCATE\b|\bDELETE\s+FROM\b/i);
   assert.doesNotMatch(sql,/tpos_v1_|tpos_v2_tenant_[1-9]/i);

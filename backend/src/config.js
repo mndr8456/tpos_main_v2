@@ -15,7 +15,10 @@ export const settings = {
     supportBigNumbers: true,
     bigNumberStrings: true,
     connectionLimit: 8,
-    waitForConnections: true
+    waitForConnections: true,
+    ssl: {
+      rejectUnauthorized: false
+    }
   },
   central: process.env.CENTRAL_DB || 'tpos_v2_central',
   prefix: process.env.TENANT_DB_PREFIX || 'tpos_v2_tenant_',

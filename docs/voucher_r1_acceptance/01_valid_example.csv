@@ -1,0 +1,2 @@
+﻿voucher_code,voucher_name,description,discount_type,discount_value,minimum_spend,maximum_discount,starts_at,ends_at,order_scope,eligibility_type,targets,usage_limit,per_customer_limit,status
+TESTVC001,Voucher Test RM10,"Voucher test, preview first",FIXED_AMOUNT,10.00,20.00,,2026-10-01 00:00:00,2027-12-31 23:59:59,BOTH,ALL,,2,1,ACTIVE

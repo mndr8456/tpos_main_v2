@@ -64,4 +64,34 @@ async function csvValidations(pool,csv){const rows=parseDiscountCsv(csv);const c
 const csvRequest=z.object({csv:z.string().max(1024*1024)}).strict();
 export async function previewDiscountImport(req,res){const {csv}=csvRequest.parse(req.body);const rows=await csvValidations(req.auth.pool,csv);const [existing]=await req.auth.pool.execute('SELECT discount_code FROM discounts');const registered=new Set(existing.map(x=>x.discount_code));const output=rows.map(row=>row.error?row:registered.has(row.data.discountCode)?{line:row.line,error:'DISCOUNT_CODE_DUPLICATE'}:{line:row.line,data:row.data});return res.json({count:output.length,valid:output.every(r=>!r.error),rows:output.map(r=>({line:r.line,error:r.error||'',code:r.data?.discountCode,name:r.data?.discountName}))});}
 export async function importDiscounts(req,res){const {csv}=csvRequest.parse(req.body);const rows=await csvValidations(req.auth.pool,csv);if(rows.some(r=>r.error))throw failure('CSV_VALIDATION_FAILED');try{await transaction(req.auth.pool,async conn=>{for(const row of rows)await insertDiscount(conn,row.data,req.auth.user.id,'DISCOUNT_IMPORT');});return res.status(201).json({message:'DISCOUNTS_IMPORTED',count:rows.length});}catch(e){return dbError(res,e);}}
-export async function previewDiscountCalculation(req,res){const id=positive.parse(req.params.id);const {eligibleSubtotal,productId=null}=z.object({eligibleSubtotal:money,productId:positive.nullable().optional()}).strict().parse(req.body);const row=await getRow(req.auth.pool,id);if(!row)throw failure('DISCOUNT_NOT_FOUND',404);const targets=await targetRows(req.auth.pool,id);let product=null;if(productId!=null){const [[match]]=await req.auth.pool.execute('SELECT id,category_id,status,is_deleted FROM products WHERE id=?',[productId]);if(match&&match.status==='ACTIVE'&&!match.is_deleted)product=match;}const eligible=row.eligibility_type==='ALL'||(product!==null&&targets.some(t=>t.active&&((row.eligibility_type==='PRODUCT'&&t.id===String(product.id))||(row.eligibility_type==='CATEGORY'&&t.id===String(product.category_id)))));const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());const part=type=>parts.find(p=>p.type===type)?.value;const date=`${part('year')}-${part('month')}-${part('day')}`;return res.json({preview:true,posting:false,...evaluateDiscount(row,{eligibleSubtotal,date,usageCount:row.usage_count,eligible})});}
+// Read-only calculator for Discount Master. Optional usage count is a WHAT-IF scenario,
+// never a redemption. The actual database usage_count is not written or overridden.
+export async function previewDiscountCalculation(req,res){
+ const id=positive.parse(req.params.id);
+ const {eligibleSubtotal,productId=null,simulatedUsageCount=null}=z.object({
+  eligibleSubtotal:money,productId:positive.nullable().optional(),
+  simulatedUsageCount:z.number().int().min(0).max(1000000000).nullable().optional()
+ }).strict().parse(req.body);
+ const row=await getRow(req.auth.pool,id);
+ if(!row)throw failure('DISCOUNT_NOT_FOUND',404);
+ const targets=await targetRows(req.auth.pool,id);
+ let product=null;
+ if(productId!=null){
+  const [[match]]=await req.auth.pool.execute('SELECT id,category_id,status,is_deleted FROM products WHERE id=?',[productId]);
+  if(match&&match.status==='ACTIVE'&&!match.is_deleted)product=match;
+ }
+ const eligible=row.eligibility_type==='ALL'||(product!==null&&targets.some(t=>t.active&&(
+  (row.eligibility_type==='PRODUCT'&&t.id===String(product.id))||
+  (row.eligibility_type==='CATEGORY'&&t.id===String(product.category_id))
+ )));
+ const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kuala_Lumpur',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+ const part=type=>parts.find(p=>p.type===type)?.value;
+ const date=`${part('year')}-${part('month')}-${part('day')}`;
+ const actualUsageCount=Number(row.usage_count);
+ const evaluationUsageCount=simulatedUsageCount??actualUsageCount;
+ return res.json({
+  preview:true,posting:false,simulation:simulatedUsageCount!==null,
+  date,actualUsageCount,evaluationUsageCount,usageLimit:row.usage_limit==null?null:Number(row.usage_limit),
+  ...evaluateDiscount(row,{eligibleSubtotal,date,usageCount:evaluationUsageCount,eligible})
+ });
+}

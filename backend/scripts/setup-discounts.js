@@ -11,9 +11,9 @@ try{
    const [tables]=await pool.execute("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('discounts','discount_targets','discount_audit_logs')");
    const [perms]=await pool.execute("SELECT code FROM permissions WHERE code LIKE 'discounts.%'");
    const [grants]=await pool.execute("SELECT permission_code FROM role_permissions rp JOIN roles r ON r.id=rp.role_id WHERE r.code='OWNER' AND rp.permission_code LIKE 'discounts.%'");
-   const current=tables.length===3&&perms.length===7&&grants.length===7;
-   if(apply)await executeSchema(tenant.db_name,'009_tenant_discounts.sql');
-   console.log(JSON.stringify({tenantId:String(tenant.id),status:apply?'APPLIED':current?'CURRENT':'MISSING',mode:apply?'apply':'read-only'}));
+   const current=tables.length===3&&perms.length>=7&&grants.length>=7;
+   if(apply&&!current)await executeSchema(tenant.db_name,'009_tenant_discounts.sql');
+   console.log(JSON.stringify({tenantId:String(tenant.id),status:apply&&!current?'APPLIED':current?'CURRENT':'MISSING',mode:apply?'apply':'read-only'}));
   }catch(e){failures++;console.error(JSON.stringify({tenantId:String(tenant.id),status:'FAILED',error:e.code||e.message}));}
  }
  console.log(JSON.stringify({module:'discounts-r1',tenants:tenants.length,failures,applied:apply}));
