@@ -15,6 +15,7 @@ import { supplierCsvTemplate } from './suppliers-csv.js';
 import {listDiscounts,exportDiscounts,discountMeta,createDiscount,updateDiscount,discountStatus,archiveDiscount,discountAudit,previewDiscountImport,importDiscounts,previewDiscountCalculation} from './discounts.js';
 import {discountCsvTemplate} from './discounts-csv.js';
 import {discountOwnerAdminOnly} from './discount-role-guard.js';
+import {shiftMeta,listShifts,shiftDetails,openShift,addShiftMovement,closeShift,shiftAudit,exportShifts} from './cash-shifts.js';
 import {voucherOwnerOnly} from './voucher-owner-guard.js';
 import {listVouchers,voucherMeta,createVoucher,updateVoucher,voucherStatus,archiveVoucher,voucherAudit,voucherPrintSettings,saveVoucherPrintSettings,previewVoucher,voucherCsvTemplate,exportVouchers,previewVoucherImport,importVouchers} from './vouchers.js';
 import {listProducts,exportProducts,productMeta,productStructure,createProduct,updateProduct,productStatus,archiveProduct,productAudit,listBranchPrices,saveBranchPrice,previewProductsImport,importProducts,productCsvTemplate,uploadProductImage,readProductImage} from './products.js';
@@ -44,6 +45,15 @@ export function createApp(){
  app.post('/api/v2/auth/logout',authenticate,logout);
  app.post('/api/v2/auth/change-password',authenticate,changePassword);
  app.get('/api/v2/dashboard/overview',authenticate,permitted('dashboard.view'),dashboardOverview);
+
+ app.get('/api/v2/cash-shifts/meta',authenticate,permitted('cash_shifts.view'),shiftMeta);
+ app.get('/api/v2/cash-shifts',authenticate,permitted('cash_shifts.view'),listShifts);
+ app.get('/api/v2/cash-shifts/export',authenticate,permitted('cash_shifts.export'),exportShifts);
+ app.get('/api/v2/cash-shifts/:id',authenticate,permitted('cash_shifts.view'),shiftDetails);
+ app.get('/api/v2/cash-shifts/:id/audit',authenticate,permitted('cash_shifts.view'),shiftAudit);
+ app.post('/api/v2/cash-shifts',authenticate,permitted('cash_shifts.open'),openShift);
+ app.post('/api/v2/cash-shifts/:id/movements',authenticate,addShiftMovement);
+ app.post('/api/v2/cash-shifts/:id/close',authenticate,closeShift);
  app.get('/api/v2/vouchers',authenticate,permitted('vouchers.view'),listVouchers);
  app.get('/api/v2/vouchers/meta',authenticate,permitted('vouchers.view'),voucherMeta);
  app.get('/api/v2/vouchers/export',authenticate,permitted('vouchers.manage'),exportVouchers);
