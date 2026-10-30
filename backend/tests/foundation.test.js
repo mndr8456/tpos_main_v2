@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { join,dirname } from 'node:path';
 import { hashPassword, verifyPassword, passwordAllowed, freshToken, tokenHash } from '../src/passwords.js';
@@ -61,9 +61,13 @@ test('Server preserves password versioning and handles failed login lockout',asy
  assert.match(auth,/PASSWORD_CHANGE_REQUIRED/);
 });
 test('New ZIP source excludes all prior modules, migrations and V1 reference tree',async()=>{
- // The local Git metadata directory is not part of the delivered application source.
+ // Local Git metadata is excluded. SECURITY.md is an optional root-level
+ // security policy document; it is not a legacy module or a database migration.
  const names=(await readdir(root)).filter(name=>name!=='.git');
- assert.deepEqual(names.sort(),['.gitignore','README.md','backend','database','docs','frontend'].sort());
+ assert.deepEqual(names.filter(name=>name!=='SECURITY.md').sort(),['.gitignore','README.md','backend','database','docs','frontend'].sort());
+ if(names.includes('SECURITY.md')){
+  assert.equal((await stat(join(root,'SECURITY.md'))).isFile(),true,'SECURITY.md must be a regular file');
+ }
  const db=await readdir(join(root,'database'));
  assert.equal(db.some(n=>/04[1-3]|v1|legacy/i.test(n)),false);
 });
