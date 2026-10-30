@@ -93,17 +93,22 @@ export async function addShiftMovement(req,res){
 }
 export async function closeShift(req,res){
  const id=parseId(req);if(!operator(req))throw fail('SHIFT_ACTION_DENIED',403);
- const data=z.object({countedCash:money,notes:z.string().trim().max(1000).optional().default('')}).strict().parse(req.body);
+ const data=z.object({countedCash:money,notes:z.string().trim().max(1000).optional().default(''),expectedManualCash:money.optional(),varianceAcknowledged:z.boolean().optional().default(false)}).strict().parse(req.body);
  const result=await txn(req.auth.pool,async conn=>{
   const shift=await findShift(conn,id,true);assertAction(req,shift,'cash_shifts.close.own','cash_shifts.close.any');
   if(shift.status!=='OPEN')throw fail('SHIFT_ALREADY_CLOSED',409);
   if(String(shift.cashier_user_id)!==String(req.auth.user.id)&&data.notes.length<8)throw fail('MANAGER_CLOSE_REASON_REQUIRED');
   const [movements]=await conn.execute('SELECT direction,amount FROM cash_shift_movements WHERE shift_id=?',[id]);
   const expected=expectedSen(shift.opening_cash,movements),counted=parseSen(data.countedCash),variance=counted-expected;
+  if(data.expectedManualCash!==undefined&&parseSen(data.expectedManualCash)!==expected)throw fail('SHIFT_EXPECTED_BALANCE_CHANGED',409);
+  if(variance!==0n){
+   if(data.expectedManualCash===undefined||!data.varianceAcknowledged)throw fail('SHIFT_VARIANCE_ACK_REQUIRED',409);
+   if(data.notes.length<8)throw fail('SHIFT_VARIANCE_REASON_REQUIRED');
+  }
   const [update]=await conn.execute(`UPDATE cash_shifts SET status='CLOSED',closed_by=?,closed_at=UTC_TIMESTAMP(6),counted_cash=?,manual_expected_cash=?,cash_variance=?,closing_notes=? WHERE id=? AND status='OPEN'`,
    [req.auth.user.id,fmtSen(counted),fmtSen(expected),fmtSen(variance),data.notes||null,id]);
   if(update.affectedRows!==1)throw fail('SHIFT_CLOSE_CONFLICT',409);
-  await audit(conn,id,req.auth.user.id,'CLOSE',{countedCash:fmtSen(counted),manualExpected:fmtSen(expected),variance:fmtSen(variance),notes:data.notes,posIntegration:'NOT_CONNECTED'});
+  await audit(conn,id,req.auth.user.id,'CLOSE',{countedCash:fmtSen(counted),manualExpected:fmtSen(expected),variance:fmtSen(variance),varianceAcknowledged:variance!==0n&&data.varianceAcknowledged,notes:data.notes,posIntegration:'NOT_CONNECTED'});
   return {countedCash:fmtSen(counted),manualExpected:fmtSen(expected),variance:fmtSen(variance)};
  });
  return res.json({message:'SHIFT_CLOSED',...result,expectedBasis:'OPENING_FLOAT_AND_MANUAL_MOVEMENTS_ONLY'});
