@@ -26,23 +26,23 @@ function AuthView({onAuth}){
  // The registration page is intentionally available only at /register, not as a login tab.
  const isRegistration=window.location.pathname.replace(/\/+$/,'')==='/register';
  const [email,setEmail]=useState(''),[password,setPassword]=useState(''),[reveal,setReveal]=useState(false);
- const [form,setForm]=useState(initialReg),[registrationKey,setRegistrationKey]=useState('');
+ const [form,setForm]=useState(initialReg);
  const [error,setError]=useState(''),[message,setMessage]=useState(()=>!isRegistration&&new URLSearchParams(window.location.search).get('registered')==='1'?'Registered Successfull':'');
  const [busy,setBusy]=useState(false);
  const update=(key,val)=>setForm(p=>({...p,[key]:val}));
  async function submit(e){e.preventDefault();setBusy(true);setError('');setMessage('');try{
   if(!isRegistration){const r=await request('/auth/login',{method:'POST',body:{email,password}});onAuth(r);}
   else {
-   await request('/tenants/register',{method:'POST',body:form,headers:{'X-Registration-Key':registrationKey}});
+   await request('/tenants/register',{method:'POST',body:form});
    window.location.replace('/login?registered=1');
   }
  }catch(e){setError(e.message);}finally{setBusy(false);}}
  return <main className={`auth-layout ${isRegistration ? 'auth-register' : 'auth-login'}`}><section className="welcome"><div className="brand">TPOS <span>V2</span></div><p className="eyebrow">CLEAN REBUILD • FOUNDATION R1</p><h1>One workspace.<br/>Every business.</h1><p>A new tenant-isolated foundation, starting with Users, access controls and an auditable login.</p><div className="welcome-points"><span>Central tenant directory</span><span>Branch-based user access</span><span>Account lockout and audit trail</span></div></section>
   <section className="auth-panel">
    <Notice error={error} message={message} onClose={()=>{setError('');setMessage('');}}/>
-   <form onSubmit={submit} className="auth-form"><h2>{isRegistration?'New business registration':'Welcome back'}</h2><p className="muted">{isRegistration?'A new tenant database will be created for this business. Administrator authorization is required.':'Sign in using your email. The tenant is detected automatically.'}</p>
+   <form onSubmit={submit} className="auth-form"><h2>{isRegistration?'New business registration':'Welcome back'}</h2><p className="muted">{isRegistration?'A separate tenant database and Owner account will be created for your business.':'Sign in using your email. The tenant is detected automatically.'}</p>
    {!isRegistration?<><Field label="Email" type="email" value={email} onChange={setEmail} required autoComplete="username"/><label className="field"><span>Password</span><div className="password-input"><input type={reveal?'text':'password'} required value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password"/><button type="button" onClick={()=>setReveal(v=>!v)} aria-label="Show or hide password">{reveal?<EyeOff size={18}/>:<Eye size={18}/>}</button></div></label></>:
-   <><Field label="Administrator Registration Key" type="password" required value={registrationKey} onChange={setRegistrationKey} autoComplete="off"/><label className="field"><span>Business Type</span><select value={form.businessType} onChange={e=>update('businessType',e.target.value)}>{types.map(x=><option key={x} value={x}>{x.replaceAll('_',' ')}</option>)}</select></label><div className="form-two">{regFields.map(([key,label])=><Field key={key} label={label} type={key==='ownerEmail'?'email':key==='ownerPassword'?'password':'text'} required={!label.includes('(optional)')} value={form[key]} onChange={v=>update(key,v)} placeholder={key==='ownerPassword'?'12+ chars with letters and numbers':''}/>)}</div></>}
+   <><label className="field"><span>Business Type</span><select value={form.businessType} onChange={e=>update('businessType',e.target.value)}>{types.map(x=><option key={x} value={x}>{x.replaceAll('_',' ')}</option>)}</select></label><div className="form-two">{regFields.map(([key,label])=><Field key={key} label={label} type={key==='ownerEmail'?'email':key==='ownerPassword'?'password':'text'} required={!label.includes('(optional)')} value={form[key]} onChange={v=>update(key,v)} placeholder={key==='ownerPassword'?'12+ chars with letters and numbers':''}/>)}</div></>}
    <button className="primary" disabled={busy} type="submit">{busy?'Working...':isRegistration?'Create Business & Owner':'Sign In'}</button>
    {isRegistration&&<a className="outline" href="/login">Back to Sign In</a>}
    </form>

@@ -4,6 +4,7 @@ import cors from 'cors';
 import { ZodError } from 'zod';
 import { settings } from './config.js';
 import { registerTenant } from './tenants.js';
+import { createRegistrationRateLimit } from './registration-rate-limit.js';
 import { login, authenticate, permitted, me, logout, changePassword } from './auth.js';
 import { userMeta,listUsers,createUser,updateUser,changeUserEmail,unlockUser,resetUserPassword,listAudit } from './users.js';
 import { previewUsersImport,importUsers,userCsvTemplate } from './users-import.js';
@@ -40,7 +41,7 @@ export function createApp(){
   next();
  });
  app.get('/api/v2/health',(_req,res)=>res.json({status:'OK',build:'TPOS_V2_CLEAN_R1'}));
- app.post('/api/v2/tenants/register',registerTenant);
+ app.post('/api/v2/tenants/register',createRegistrationRateLimit(),registerTenant);
  app.post('/api/v2/auth/login',login);
  app.get('/api/v2/auth/me',authenticate,me);
  app.post('/api/v2/auth/logout',authenticate,logout);

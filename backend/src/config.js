@@ -22,8 +22,7 @@ export const settings = {
   },
   central: process.env.CENTRAL_DB || 'tpos_v2_central',
   prefix: process.env.TENANT_DB_PREFIX || 'tpos_v2_tenant_',
-  sessionHours: Math.min(24, Math.max(1, Number(process.env.SESSION_HOURS || 12))),
-  registrationAccessKey: process.env.REGISTRATION_ACCESS_KEY || ''
+  sessionHours: Math.min(24, Math.max(1, Number(process.env.SESSION_HOURS || 12)))
 };
 
 export function assertConfig() {

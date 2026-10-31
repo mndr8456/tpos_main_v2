@@ -1,5 +1,3 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
-import { settings } from './config.js';
 import { z } from 'zod';
 import { adminPool, centralPool, executeSchema, quoteIdentifier, tenantDatabase, tenantPool } from './database.js';
 import { hashPassword } from './passwords.js';
@@ -29,17 +27,7 @@ const seedProfile=async (db,data,passwordHash)=>{
   return owner.insertId;
  } catch(e){ await conn.rollback();throw e; } finally{conn.release();}
 };
-export function registrationAuthorized(provided, configured=settings.registrationAccessKey) {
- // Compare fixed-length digests, without exposing registration secrets in URLs, logs or responses.
- if(typeof configured!=='string'||configured.length<24||configured.includes('CHANGE_ME')||typeof provided!=='string'||!provided)return false;
- const expected=createHash('sha256').update(configured).digest();
- const actual=createHash('sha256').update(provided).digest();
- return timingSafeEqual(expected,actual);
-}
 export async function registerTenant(request,response) {
- if(settings.registrationAccessKey.length<24||settings.registrationAccessKey.includes('CHANGE_ME'))return response.status(503).json({error:'REGISTRATION_DISABLED'});
- if(!registrationAuthorized(request.get('X-Registration-Key')))
-  return response.status(403).json({error:'REGISTRATION_NOT_AUTHORIZED'});
  const data=registrationSchema.parse(request.body);
  const passwordHash=await hashPassword(data.ownerPassword);
  const cp=centralPool();
