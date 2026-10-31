@@ -1,13 +1,14 @@
 // Product import template for TPOS V2 Clean Rebuild. No stock quantities in Product imports.
 export const PRODUCT_CSV_HEADERS=Object.freeze([
- 'sku','barcode','product_name','description','product_type','category','supplier','cost_price','selling_price','min_stock_qty','track_stock','is_weighable','weighing_unit','requires_preparation','preparation_station','lhdn_classification_code','lhdn_unit_code','lhdn_tax_type_code','lhdn_tax_rate','is_tax_inclusive','status','product_structure','base_unit','packaging_units','component_skus','jkdm_tax_type','jkdm_tax_rate','jkdm_tax_inclusive'
+ 'sku','barcode','product_name','description','product_type','category','supplier','cost_price','selling_price','min_stock_qty','track_stock','is_weighable','weighing_unit','requires_preparation','preparation_station','lhdn_classification_code','lhdn_unit_code','lhdn_tax_type_code','lhdn_tax_rate','is_tax_inclusive','status','product_structure','base_unit','packaging_units','component_skus','jkdm_tax_type','jkdm_tax_rate','jkdm_tax_inclusive','is_kpdn_controlled'
 ]);
 export const PRODUCT_CSV_ROW_LIMIT=5000;
 export const PRODUCT_CSV_BYTE_LIMIT=8*1024*1024;
 const LEGACY_HEADERS=PRODUCT_CSV_HEADERS.slice(0,21);
 const R2_HEADERS=PRODUCT_CSV_HEADERS.slice(0,25);
+const R3_HEADERS=PRODUCT_CSV_HEADERS.slice(0,28);
 const fail=code=>Object.assign(new Error(code),{status:400});
-export const productCsvTemplate=()=> '\uFEFF'+PRODUCT_CSV_HEADERS.join(',')+'\r\n'+['','9550000001234','Sample Product','Sample description','GOODS','Beverages','','3.50','5.00','5.00','YES','NO','KG','NO','','022','EA','06','0','NO','ACTIVE','SINGLE','PCS','','','NONE','0','NO'].join(',')+'\r\n';
+export const productCsvTemplate=()=> '\uFEFF'+PRODUCT_CSV_HEADERS.join(',')+'\r\n'+['','9550000001234','Sample Product','Sample description','GOODS','Beverages','','3.50','5.00','5.00','YES','NO','KG','NO','','022','EA','06','0','NO','ACTIVE','SINGLE','PCS','','','NONE','0','NO','NO'].join(',')+'\r\n';
 export function parseProductCsv(raw){
  if(typeof raw!=='string'||Buffer.byteLength(raw,'utf8')>PRODUCT_CSV_BYTE_LIMIT)throw fail('CSV_TOO_LARGE');
  const lines=[];let field='',line=[],quoted=false,closed=false;const text=raw.replace(/^\uFEFF/,'');
@@ -24,7 +25,7 @@ export function parseProductCsv(raw){
  if(line.length||field.length){line.push(field);if(line.some(x=>x.trim()))lines.push(line);}
  if(lines.length<2)throw fail('CSV_EMPTY');
  const header=lines.shift().map(x=>x.trim().toLowerCase());
- const acceptedHeaders=[PRODUCT_CSV_HEADERS,R2_HEADERS,LEGACY_HEADERS].some(headers=>header.length===headers.length&&header.every((x,i)=>x===headers[i]));
+ const acceptedHeaders=[PRODUCT_CSV_HEADERS,R3_HEADERS,R2_HEADERS,LEGACY_HEADERS].some(headers=>header.length===headers.length&&header.every((x,i)=>x===headers[i]));
  if(!acceptedHeaders)throw fail('CSV_INVALID_HEADERS');
  if(lines.length>PRODUCT_CSV_ROW_LIMIT)throw fail('CSV_ROW_LIMIT');
  const skuSet=new Set(),barcodeSet=new Set();
@@ -53,7 +54,7 @@ export function parseProductCsv(raw){
    weighingUnit:v.weighing_unit.toUpperCase()||'KG',requiresPreparation:csvBoolean(v.requires_preparation,false),
    stationCode:v.preparation_station.toUpperCase(),lhdnClassificationCode:v.lhdn_classification_code||'022',
    lhdnUnitCode:v.lhdn_unit_code||'EA',lhdnTaxTypeCode:v.lhdn_tax_type_code||'06',
-   lhdnTaxRate:v.lhdn_tax_rate,isTaxInclusive:csvBoolean(v.is_tax_inclusive,false),status:v.status.toUpperCase()||'ACTIVE',jkdmTaxType:(v.jkdm_tax_type||'NONE').toUpperCase(),jkdmTaxRate:v.jkdm_tax_rate||'0',jkdmTaxInclusive:csvBoolean(v.jkdm_tax_inclusive,false)}};
+   lhdnTaxRate:v.lhdn_tax_rate,isTaxInclusive:csvBoolean(v.is_tax_inclusive,false),status:v.status.toUpperCase()||'ACTIVE',jkdmTaxType:(v.jkdm_tax_type||'NONE').toUpperCase(),jkdmTaxRate:v.jkdm_tax_rate||'0',jkdmTaxInclusive:csvBoolean(v.jkdm_tax_inclusive,false),isKpdnControlled:csvBoolean(v.is_kpdn_controlled,false)}};
  });
 }
 function csvBoolean(value,defaultValue){if(!value)return defaultValue;const v=value.toUpperCase();if(['YES','TRUE','1'].includes(v))return true;if(['NO','FALSE','0'].includes(v))return false;return 'INVALID';}

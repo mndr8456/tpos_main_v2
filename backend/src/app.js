@@ -17,6 +17,10 @@ import {listDiscounts,exportDiscounts,discountMeta,createDiscount,updateDiscount
 import {discountCsvTemplate} from './discounts-csv.js';
 import {discountOwnerAdminOnly} from './discount-role-guard.js';
 import {shiftMeta,listShifts,shiftDetails,openShift,addShiftMovement,closeShift,shiftAudit,exportShifts} from './cash-shifts.js';
+import {getSstSettings,saveSstSettings,listSstAudit} from './sst-settings.js';
+import {getServiceChargeSettings,saveServiceChargeSettings,listServiceChargeAudit} from './service-charge.js';
+import {posBootstrap,listPosDrafts,createPosDraft,getPosDraft,addPosLine,changePosLine,changePosDraftStatus,quotePosDraft,posDraftAudit} from './pos-drafts.js';
+import {listPaymentMethods,savePaymentMethod,uploadPaymentImage,removePaymentImage,readPaymentImage,paymentMethodAudit} from './payment-methods.js';
 import {cashDrawerMeta,listCashDrawer,recordCashDrawerOpen,cashDrawerAudit,exportCashDrawer} from './cash-drawer.js';
 import {voucherOwnerOnly} from './voucher-owner-guard.js';
 import {listVouchers,voucherMeta,createVoucher,updateVoucher,voucherStatus,archiveVoucher,voucherAudit,voucherPrintSettings,saveVoucherPrintSettings,previewVoucher,voucherCsvTemplate,exportVouchers,previewVoucherImport,importVouchers} from './vouchers.js';
@@ -31,6 +35,7 @@ export function createApp(){
  app.use('/api/v2/discounts/import',express.json({limit:'2mb'}));
  app.use('/api/v2/vouchers/import',express.json({limit:'2mb'}));
  app.use('/api/v2/products/:id/image',express.json({limit:'3mb'}));
+ app.use('/api/v2/payment-methods/:branchId/:code/image',express.json({limit:'2mb'}));
  app.use(express.json({limit:'320kb'}));
  app.use((req,res,next)=>{
   if(!['GET','HEAD','OPTIONS'].includes(req.method)){
@@ -48,6 +53,27 @@ export function createApp(){
  app.post('/api/v2/auth/change-password',authenticate,changePassword);
  app.get('/api/v2/dashboard/overview',authenticate,permitted('dashboard.view'),dashboardOverview);
 
+ app.get('/api/v2/service-charge',authenticate,permitted('service_charge.view'),getServiceChargeSettings);
+ app.put('/api/v2/service-charge',authenticate,permitted('service_charge.manage'),saveServiceChargeSettings);
+ app.get('/api/v2/service-charge/audit',authenticate,permitted('service_charge.audit'),listServiceChargeAudit);
+ app.get('/api/v2/sst-settings',authenticate,permitted('sst_settings.view'),getSstSettings);
+ app.get('/api/v2/sst-settings/audit',authenticate,permitted('sst_settings.audit'),listSstAudit);
+ app.put('/api/v2/sst-settings/:taxType',authenticate,permitted('sst_settings.manage'),saveSstSettings);
+ app.get('/api/v2/pos/bootstrap',authenticate,permitted('pos.view'),posBootstrap);
+ app.get('/api/v2/pos/drafts',authenticate,permitted('pos.view'),listPosDrafts);
+ app.post('/api/v2/pos/drafts',authenticate,permitted('pos.cart.manage'),createPosDraft);
+ app.get('/api/v2/pos/drafts/:id',authenticate,permitted('pos.view'),getPosDraft);
+ app.post('/api/v2/pos/drafts/:id/lines',authenticate,permitted('pos.cart.manage'),addPosLine);
+ app.patch('/api/v2/pos/drafts/:id/lines/:lineId',authenticate,permitted('pos.cart.manage'),changePosLine);
+ app.patch('/api/v2/pos/drafts/:id/status',authenticate,permitted('pos.cart.manage'),changePosDraftStatus);
+ app.post('/api/v2/pos/drafts/:id/quote',authenticate,permitted('pos.view'),quotePosDraft);
+ app.get('/api/v2/pos/drafts/:id/audit',authenticate,permitted('pos.audit'),posDraftAudit);
+ app.get('/api/v2/payment-methods',authenticate,permitted('payment_methods.view'),listPaymentMethods);
+ app.get('/api/v2/payment-methods/audit',authenticate,permitted('payment_methods.audit'),paymentMethodAudit);
+ app.get('/api/v2/payment-methods/:branchId/:code/image',authenticate,permitted('payment_methods.view'),readPaymentImage);
+ app.put('/api/v2/payment-methods/:branchId/:code',authenticate,permitted('payment_methods.manage'),savePaymentMethod);
+ app.post('/api/v2/payment-methods/:branchId/:code/image',authenticate,permitted('payment_methods.manage'),uploadPaymentImage);
+ app.delete('/api/v2/payment-methods/:branchId/:code/image',authenticate,permitted('payment_methods.manage'),removePaymentImage);
  app.get('/api/v2/cash-drawer/meta',authenticate,permitted('cash_drawer.view'),cashDrawerMeta);
  app.get('/api/v2/cash-drawer',authenticate,permitted('cash_drawer.view'),listCashDrawer);
  app.get('/api/v2/cash-drawer/audit',authenticate,permitted('cash_drawer.audit'),cashDrawerAudit);

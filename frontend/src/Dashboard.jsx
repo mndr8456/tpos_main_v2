@@ -1,3 +1,4 @@
+import {refreshPage} from './refresh-page.js';
 import { useCallback, useEffect, useState } from 'react';
 import { Activity, BarChart3, Boxes, Building2, Clock3, FolderTree, Package, RefreshCw, ShoppingBag, TrendingUp, Users, UserRoundCheck, ShieldCheck } from 'lucide-react';
 import { request } from './api.js';
@@ -22,7 +23,7 @@ function PendingPanel({icon:Icon,title,description}){
   <div className="dashboard-empty"><Icon size={32}/><p>Data not available yet</p><span>{description}</span></div>
  </section>;
 }
-export default function Dashboard({profile,onNavigate}){
+export default function Dashboard({profile,onNavigate,notify}){
  const [data,setData]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
  const refresh=useCallback(async()=>{
   setLoading(true);setError('');
@@ -31,7 +32,7 @@ export default function Dashboard({profile,onNavigate}){
  useEffect(()=>{refresh();},[refresh]);
  return <main className="page dashboard-page">
   <div className="page-head"><div><p className="eyebrow">BUSINESS / OVERVIEW</p><h1>Dashboard</h1><p className="muted">{profile.business.name} · Live tenant data and module readiness</p></div>
-   <div className="actions"><IconAction icon={RefreshCw} label="Refresh Dashboard" onClick={refresh} disabled={loading}/></div>
+   <div className="actions"><IconAction icon={RefreshCw} label="Refresh Dashboard" onClick={()=>refreshPage(refresh,notify)} disabled={loading}/></div>
   </div>
   {error&&<div className="notice error" role="alert">Unable to load dashboard: {error}</div>}
   {loading&&!data?<div className="dashboard-loading" role="status">Loading dashboard records...</div>:null}

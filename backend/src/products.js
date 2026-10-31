@@ -29,18 +29,19 @@ export const productSchema=z.object({
  lhdnTaxRate:decimal(3,100),
  lhdnTaxExemptionReason:optional(500),lhdnProductTariffCode:optional(40),
  lhdnCountryOfOriginCode:optional(3),isTaxInclusive:z.boolean(),
- jkdmTaxType:z.enum(['NONE','SALES_TAX','SERVICE_TAX']).default('NONE'),jkdmTaxRate:decimal(3,100),jkdmTaxInclusive:z.boolean().default(false),
+ jkdmTaxType:z.enum(['NONE','SALES_TAX','SERVICE_TAX']).default('NONE'),jkdmTaxRate:decimal(3,100),jkdmTaxInclusive:z.boolean().default(false),isKpdnControlled:z.boolean().default(false),
  status:z.enum(['ACTIVE','INACTIVE']).default('ACTIVE')
 }).strict().superRefine((p,ctx)=>{
  validateStructure(p,ctx);
+ if(p.isKpdnControlled&&p.productType!=='GOODS')ctx.addIssue({code:'custom',path:['isKpdnControlled'],message:'Only goods can be marked KPDN controlled'});
  if(p.jkdmTaxType==='NONE'&&(p.jkdmTaxRate!==0||p.jkdmTaxInclusive))ctx.addIssue({code:'custom',path:['jkdmTaxRate'],message:'JKDM tax rate and inclusive flag must be zero/false for NONE'});
  if(p.productType==='SERVICE'&&(p.trackStock||p.isWeighable))ctx.addIssue({code:'custom',path:['productType'],message:'Services cannot be stock tracked or weighed'});
  if(p.isWeighable&&!p.trackStock)ctx.addIssue({code:'custom',path:['isWeighable'],message:'Weighable products must be stock tracked'});
  if(p.requiresPreparation&&!p.stationId)ctx.addIssue({code:'custom',path:['stationId'],message:'Preparation station required'});
  if(!p.requiresPreparation&&p.stationId)ctx.addIssue({code:'custom',path:['stationId'],message:'Disable preparation station when preparation is off'});
 });
-const fields=['sku','barcode','product_name','product_description','product_image_url','product_type','product_structure','base_unit_code','category_id','supplier_id','cost_price','selling_price','min_stock_qty','track_stock','is_weighable','weighing_unit','requires_preparation','preparation_station_id','lhdn_classification_code','lhdn_unit_code','lhdn_tax_type_code','lhdn_tax_rate','lhdn_tax_exemption_reason','lhdn_product_tariff_code','lhdn_country_of_origin_code','is_tax_inclusive','jkdm_tax_type','jkdm_tax_rate','jkdm_tax_inclusive','status'];
-const values=p=>[p.sku||null,p.barcode||null,p.productName,p.description||null,p.imageUrl||null,p.productType,p.productStructure,p.baseUnitCode,p.categoryId,p.supplierId||null,p.costPrice,p.sellingPrice,p.minStockQty,Number(p.trackStock),Number(p.isWeighable),p.weighingUnit,Number(p.requiresPreparation),p.stationId||null,p.lhdnClassificationCode,p.lhdnUnitCode,p.lhdnTaxTypeCode,p.lhdnTaxRate,p.lhdnTaxExemptionReason||null,p.lhdnProductTariffCode||null,p.lhdnCountryOfOriginCode||null,Number(p.isTaxInclusive),p.jkdmTaxType,p.jkdmTaxRate,Number(p.jkdmTaxInclusive),p.status];
+const fields=['sku','barcode','product_name','product_description','product_image_url','product_type','product_structure','base_unit_code','category_id','supplier_id','cost_price','selling_price','min_stock_qty','track_stock','is_weighable','weighing_unit','requires_preparation','preparation_station_id','lhdn_classification_code','lhdn_unit_code','lhdn_tax_type_code','lhdn_tax_rate','lhdn_tax_exemption_reason','lhdn_product_tariff_code','lhdn_country_of_origin_code','is_tax_inclusive','jkdm_tax_type','jkdm_tax_rate','jkdm_tax_inclusive','is_kpdn_controlled','status'];
+const values=p=>[p.sku||null,p.barcode||null,p.productName,p.description||null,p.imageUrl||null,p.productType,p.productStructure,p.baseUnitCode,p.categoryId,p.supplierId||null,p.costPrice,p.sellingPrice,p.minStockQty,Number(p.trackStock),Number(p.isWeighable),p.weighingUnit,Number(p.requiresPreparation),p.stationId||null,p.lhdnClassificationCode,p.lhdnUnitCode,p.lhdnTaxTypeCode,p.lhdnTaxRate,p.lhdnTaxExemptionReason||null,p.lhdnProductTariffCode||null,p.lhdnCountryOfOriginCode||null,Number(p.isTaxInclusive),p.jkdmTaxType,p.jkdmTaxRate,Number(p.jkdmTaxInclusive),Number(p.isKpdnControlled),p.status];
 const select=`SELECT p.*,c.category_name,s.supplier_name,st.code AS station_code,st.name AS station_name FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN suppliers s ON s.id=p.supplier_id LEFT JOIN preparation_stations st ON st.id=p.preparation_station_id WHERE p.is_deleted=0`;
 const output=(r,canCost)=>{const {active_name,...item}=r;if(!canCost)delete item.cost_price;return {...item,id:String(r.id),category_id:String(r.category_id),supplier_id:r.supplier_id?String(r.supplier_id):null,preparation_station_id:r.preparation_station_id?String(r.preparation_station_id):null};};
 const costAllowed=req=>req.auth.user.permissions.includes('products.cost.view');
@@ -171,7 +172,7 @@ async function csvRows(conn,csv){
    isWeighable:d.isWeighable,weighingUnit:d.weighingUnit,requiresPreparation:d.requiresPreparation,
    stationId:d.stationCode?sts.get(d.stationCode.toLocaleLowerCase('en'))||null:'',
    lhdnClassificationCode:d.lhdnClassificationCode,lhdnUnitCode:d.lhdnUnitCode,lhdnTaxTypeCode:d.lhdnTaxTypeCode,
-   lhdnTaxRate:d.lhdnTaxRate,isTaxInclusive:d.isTaxInclusive,jkdmTaxType:d.jkdmTaxType,jkdmTaxRate:d.jkdmTaxRate,jkdmTaxInclusive:d.jkdmTaxInclusive,status:d.status};
+   lhdnTaxRate:d.lhdnTaxRate,isTaxInclusive:d.isTaxInclusive,jkdmTaxType:d.jkdmTaxType,jkdmTaxRate:d.jkdmTaxRate,jkdmTaxInclusive:d.jkdmTaxInclusive,isKpdnControlled:d.isKpdnControlled,status:d.status};
   if(resolved.components.some(x=>!x.productId))return {line:row.line,error:'COMPONENT_SKU_NOT_FOUND',...d};
   if(d.packagingUnits.some(x=>x.barcode&&barcodes.has(x.barcode.toLowerCase())))return {line:row.line,error:'SKU_OR_BARCODE_DUPLICATE',...d};
   if(!resolved.categoryId)return {line:row.line,error:'CATEGORY_NOT_ACTIVE',...d};

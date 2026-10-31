@@ -1,0 +1,160 @@
+import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import {
+ Search,ScanBarcode,Plus,Minus,Trash2,ShoppingCart,PauseCircle,PlayCircle,RefreshCw,
+ History,ShieldAlert,FolderOpen,Lock,Package,UtensilsCrossed,
+ Store,Layers3,ChevronRight,Table2,Wallet,Tag,Box,ArrowRight,X
+} from 'lucide-react';
+import {request} from './api.js';
+import {refreshPage} from './refresh-page.js';
+import './PosTerminal.css';
+
+const FNB_TYPES=new Set(['RESTAURANT','CAFE','FOOD_TRUCK','STREET_FOOD']);
+const TABLE_TYPES=new Set(['RESTAURANT','CAFE']);
+const BUSINESS_TYPES=new Set(['RESTAURANT','GROCERY','RETAIL','MINI_MARKET','CAFE','FOOD_TRUCK','STREET_FOOD']);
+const DISPLAY_NAMES={RESTAURANT:'Restaurant',GROCERY:'Grocery',RETAIL:'Retail',MINI_MARKET:'Mini Market',CAFE:'Cafe',FOOD_TRUCK:'Food Truck',STREET_FOOD:'Street Food'};
+const PAY_NAMES={CASH:'Cash',DEBIT_CARD:'Debit Card',CREDIT_CARD:'Credit Card',BANK_TRANSFER:'Bank Transfer',DUITNOW_QR:'DuitNow QR',EWALLET:'E-Wallet',E_WALLET:'E-Wallet',SARA_MYKASIH:'SARA / MyKasih'};
+const money=value=>`RM ${Number(value||0).toFixed(2)}`;
+const formatPercent=value=>{const rate=Number(value);return Number.isFinite(rate)?rate.toFixed(2).replace(/\.00$/,'').replace(/(\.\d)0$/,'$1'):null;};
+const settingLabel=(name,setting)=>setting?.enabled&&setting?.registrationConfigured&&formatPercent(setting.rate)!==null?`${name} (${formatPercent(setting.rate)}%)`:name;
+const uuid=()=>crypto.randomUUID();
+const readableError=code=>({POS_OPEN_SHIFT_REQUIRED:'Please open a Cash Shift before starting an order.',POS_DRAFT_VERSION_CHANGED:'Order changed in another session. Reload it and try again.',POS_ORIGINAL_SHIFT_CLOSED:'The original Cash Shift is closed.',POS_DRAFT_MUST_RESUME:'Resume this held order before editing.',POS_PRODUCT_NOT_AVAILABLE:'Product is inactive or no longer available.',POS_PACKAGES_AND_BUNDLES_PENDING:'This product requires the inventory composition integration.',POS_WHOLE_QUANTITY_REQUIRED:'This product requires a whole-number quantity.',POS_REQUEST_KEY_REUSED:'Duplicate request key used with different data.',POS_STACKING_POLICY_NOT_APPROVED:'Discount and Voucher cannot be stacked yet.',POS_RESTAURANT_TABLES_NOT_CONNECTED:'Restaurant tables and Dine In orders require the table integration.'})[code]||code||'Operation failed';
+function IconAction({icon:Icon,title,onClick,disabled=false,primary=false}){return <button type="button" className={`pos-icon-button ${primary?'pos-icon-primary':''}`} aria-label={title} title={title} onClick={onClick} disabled={disabled}><Icon size={18}/></button>;}
+function Pill({children,tone='neutral'}){return <span className={`pos-pill pos-pill-${tone}`}>{children}</span>;}
+export const getPosBusinessMode=type=>{
+ const businessType=String(type||'').toUpperCase().trim().replace(/[\s-]+/g,'_');
+ return {businessType,mode:FNB_TYPES.has(businessType)?'FNB':'RETAIL',hasTables:TABLE_TYPES.has(businessType),valid:BUSINESS_TYPES.has(businessType)};
+};
+// The two Apply controls expand editors/details only. The authoritative bill
+// summary remains visible and recalculates without a manual Preview action.
+function DiscountFields({discountCode,setDiscountCode,voucherCode,setVoucherCode,disabled}){
+ return <section id="pos-discount-fields" className="pos-adjustments" aria-label="Discount and Voucher inputs"><div className="pos-adjustments-title"><Tag size={17}/><strong>Discount & Voucher</strong></div><div className="pos-code-fields"><label className="field"><span>Discount code</span><input value={discountCode} onChange={e=>setDiscountCode(e.target.value)} placeholder="Enter discount code" autoComplete="off" disabled={disabled}/></label><label className="field"><span>Voucher code</span><input value={voucherCode} onChange={e=>setVoucherCode(e.target.value)} placeholder="Scan or enter voucher" autoComplete="off" disabled={disabled}/></label></div></section>;
+}
+function SstStatus({setting,label}){
+ if(!setting)return null;
+ const state=setting.enabled&&setting.registrationConfigured?'ON':'OFF';
+ return <span className={`pos-sst-status ${state==='ON'?'pos-sst-on':'pos-sst-off'}`}>{label}: {state}{state==='ON'?` · ${Number(setting.rate).toFixed(2)}% · ${setting.matchingLines} matching`:''}</span>;
+}
+function TaxDetails({bill,sst}){
+ const taxes=[{key:'salesTax',label:'Sales Tax'},{key:'serviceTax',label:'Service Tax'}];
+ return <section id="pos-tax-details" className="pos-tax-details" aria-label="Sales and Service Tax details"><div className="pos-adjustments-title"><Layers3 size={17}/><strong>Sales & Service Tax</strong></div><div className="pos-tax-lines">{taxes.map(({key,label})=>{
+  const setting=sst?.[key];
+  return <div className="pos-sst-detail" key={key}><div><span>{label}</span><strong>{bill?money(bill[key]):'—'}</strong></div>{setting&&<small>{!setting.enabled?'OFF in GST / SST Settings':!setting.registrationConfigured?'OFF — SST registration missing':setting.matchingLines===0?'ON — No matching products in this order':`ON · ${Number(setting.rate).toFixed(2)}% · ${setting.matchingLines} matching order item(s)`}</small>}</div>;
+ })}{bill&&(Number(bill.salesTaxInclusive)>0||Number(bill.serviceTaxInclusive)>0)&&<div className="pos-tax-included"><span>Included in product prices (not added again)</span><strong>{money(Number(bill.salesTaxInclusive||0)+Number(bill.serviceTaxInclusive||0))}</strong></div>}{sst&&Object.values(sst).some(item=>item.enabled&&item.registrationConfigured&&item.matchingLines===0)&&<p className="pos-sst-guidance">Tax settings are active, but only items with the matching SST Type in Product Master are taxable. No tax is added to unclassified products.</p>}</div></section>;
+}
+function BillBreakdown({bill,quoteError,quoteBusy,sst,serviceCharge}){
+ const deduction=value=>`− ${money(value||'0.00')}`;
+ const rounding=()=>bill?.roundingAdjustmentSen<0?`− ${money(Math.abs(bill.roundingAdjustmentSen)/100)}`:bill?.roundingAdjustmentSen>0?`+ ${money(bill.roundingAdjustmentSen/100)}`:money('0.00');
+ return <section className="pos-bill-details" aria-label="Order total breakdown" aria-live="polite">{quoteError&&<p role="alert" className="pos-quote-error">{quoteError}</p>}{quoteBusy&&<span className="pos-bill-calculating">Calculating…</span>}<div className="pos-quote-results"><div><span title={Number(bill?.salesTaxInclusive||0)+Number(bill?.serviceTaxInclusive||0)>0?'Net subtotal: SST already included in item prices is excluded here so the bill adds up correctly.':'Subtotal before discount and tax'}>Subtotal{Number(bill?.salesTaxInclusive||0)+Number(bill?.serviceTaxInclusive||0)>0&&<small className="pos-tax-net-hint"> (before SST)</small>}</span><b>{bill?money(bill.subtotalBeforeTax??bill.subtotal):'—'}</b></div><div><span>Discount</span><b>{bill?deduction(bill.discount):'—'}</b></div><div><span>Voucher</span><b>{bill?deduction(bill.voucher):'—'}</b></div><div><span>{settingLabel('Sales Tax',sst?.salesTax)}</span><b>{bill?money(bill.salesTax):'—'}</b></div><div><span>{settingLabel('Service Tax',sst?.serviceTax)}</span><b>{bill?money(bill.serviceTax):'—'}</b></div><div><span>{serviceCharge?.applicable&&formatPercent(serviceCharge.rate)!==null?`Service Charge (${formatPercent(serviceCharge.rate)}%)`:'Service Charge'}</span><b>{bill?money(bill.serviceCharge):'—'}</b></div><div><span>Rounding Adjustment</span><b>{bill?rounding():'—'}</b></div><div className="pos-quote-total"><strong>Total</strong><strong>{bill?money(bill.total):'—'}</strong></div></div></section>;
+}
+export default function PosTerminal({profile,notify}){
+ const [bootstrap,setBootstrap]=useState({branches:[],openShifts:[],products:[],categories:[],branchPrices:[],enabledPaymentMethods:[]});
+ const [drafts,setDrafts]=useState([]),[current,setCurrent]=useState(null),[branchId,setBranchId]=useState('');
+ const [search,setSearch]=useState(''),[barcode,setBarcode]=useState(''),[category,setCategory]=useState('ALL'),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true);
+ const [discountCode,setDiscountCode]=useState(''),[voucherCode,setVoucherCode]=useState(''),[preview,setPreview]=useState(null),[audit,setAudit]=useState(null),[showHeld,setShowHeld]=useState(false);
+ const [showAdjustments,setShowAdjustments]=useState(false),[showTaxDetails,setShowTaxDetails]=useState(false),[showPayment,setShowPayment]=useState(false),[orderScope,setOrderScope]=useState('TAKE_AWAY');
+ const [quoteBusy,setQuoteBusy]=useState(false),[quoteError,setQuoteError]=useState('');
+ const [taxRefreshKey,setTaxRefreshKey]=useState(0);
+ const scannerRef=useRef(null);
+ const autoStartingRef=useRef(false);
+ const autoAttemptedRef=useRef(null);
+ const businessMode=useMemo(()=>getPosBusinessMode(profile?.business?.type),[profile?.business?.type]);
+ const isFnb=businessMode.mode==='FNB';
+ const canManage=profile?.user?.permissions?.includes('pos.cart.manage');
+ const load=useCallback(async()=>{setLoading(true);try{const [a,b]=await Promise.all([request('/pos/bootstrap'),request('/pos/drafts')]);setBootstrap(a);setDrafts(b.drafts||[]);setBranchId(prev=>prev&&a.openShifts.some(s=>String(s.branch_id)===prev)?prev:String(a.openShifts[0]?.branch_id||''));}catch(e){notify(readableError(e.message),true);}finally{setLoading(false);}},[notify]);
+ useEffect(()=>{load();},[load]);
+ // Refresh the tenant SST quote after returning from settings in another browser tab.
+ useEffect(()=>{const refetch=()=>{if(document.visibilityState==='visible')setTaxRefreshKey(n=>n+1);};window.addEventListener('focus',refetch);document.addEventListener('visibilitychange',refetch);return ()=>{window.removeEventListener('focus',refetch);document.removeEventListener('visibilitychange',refetch);};},[]);
+ const activeShift=bootstrap.openShifts.find(s=>String(s.branch_id)===branchId);
+ const categoryMap=useMemo(()=>new Map((bootstrap.categories||[]).map(c=>[String(c.id),c.category_name])),[bootstrap.categories]);
+ const priceMap=useMemo(()=>new Map((bootstrap.branchPrices||[]).filter(p=>String(p.branch_id)===branchId).map(p=>[String(p.product_id),p.selling_price])),[bootstrap.branchPrices,branchId]);
+ const products=useMemo(()=>bootstrap.products.filter(p=>(category==='ALL'||String(p.category_id)===category)&&`${p.product_name} ${p.sku||''} ${p.barcode||''}`.toLowerCase().includes(search.toLowerCase())).slice(0,160),[bootstrap.products,category,search]);
+ const allCategories=useMemo(()=>{const ids=new Set(bootstrap.products.map(p=>String(p.category_id)));return bootstrap.categories.filter(c=>ids.has(String(c.id)));},[bootstrap.categories,bootstrap.products]);
+ const visibleMethods=(bootstrap.enabledPaymentMethods||[]).filter(m=>String(m.branch_id)===branchId&&m.method_code!=='SARA_MYKASIH');
+ const currentQty=new Map((current?.lines||[]).map(l=>[String(l.product_id),Number(l.quantity)]));
+ const locked=!canManage||!current||current.draft.status!=='DRAFT';
+ const currentLines=current?.lines||[];
+ const totalItems=currentLines.reduce((n,line)=>n+Number(line.quantity),0);
+ const currentBranch=bootstrap.branches.find(b=>String(b.id)===branchId);
+ const imageBase=import.meta.env.VITE_BACKEND_URL||'http://127.0.0.1:5100';
+ const selectedBusiness=DISPLAY_NAMES[businessMode.businessType]||String(profile?.business?.type||'Business');
+ async function mutate(fn){setBusy(true);try{const data=await fn();setCurrent(data);setPreview(null);await load();return true;}catch(e){notify(readableError(e.message),true);return false;}finally{setBusy(false);}}
+ // No New Order button: resume an existing editable cart or create one automatically
+ // for the cashier's own OPEN shift. The backend ensures repeat calls are safe.
+ useEffect(()=>{
+  if(!canManage||!branchId||!activeShift||current||loading||busy||autoStartingRef.current||autoAttemptedRef.current===String(activeShift.id))return;
+  autoAttemptedRef.current=String(activeShift.id);
+  autoStartingRef.current=true;
+  setBusy(true);
+  void (async()=>{
+   try{
+    const data=await request('/pos/drafts',{method:'POST',body:{branchId:Number(branchId),orderScope:'TAKE_AWAY',ensureExisting:true,requestKey:uuid()}});
+    setCurrent(data);
+    setPreview(null);
+   }catch(e){notify(readableError(e.message),true);}
+   finally{autoStartingRef.current=false;setBusy(false);}
+  })();
+ },[canManage,branchId,activeShift?.id,current,loading,busy,notify]);
+ function resetOrderControls(){setOrderScope('TAKE_AWAY');setDiscountCode('');setVoucherCode('');setPreview(null);setShowPayment(false);setShowAdjustments(false);setShowTaxDetails(false);setAudit(null);}
+ async function selectDraft(d){setBusy(true);try{const data=await request(`/pos/drafts/${d.id}`);setCurrent(data);setBranchId(String(data.draft.branch_id));setOrderScope(data.draft.order_scope);setShowHeld(false);setShowPayment(false);setShowAdjustments(false);setShowTaxDetails(false);setDiscountCode('');setVoucherCode('');setPreview(null);setAudit(null);}catch(e){notify(readableError(e.message),true);}finally{setBusy(false);}}
+ async function add(product,quantity='1'){if(locked)return notify('Start or resume an order first.',true);await mutate(()=>request(`/pos/drafts/${current.draft.id}/lines`,{method:'POST',body:{productId:Number(product.id),quantity,expectedVersion:current.draft.version,requestKey:uuid()}}));}
+ async function change(line,qty,remove=false){if(locked)return;await mutate(()=>request(`/pos/drafts/${current.draft.id}/lines/${line.id}`,{method:'PATCH',body:{...(remove?{remove:true}:{quantity:String(qty)}),expectedVersion:current.draft.version,requestKey:uuid()}}));}
+ async function status(next){
+  if(!current)return;
+  if(next==='DISCARDED'&&!window.confirm('Discard this order? The audit history will remain.'))return;
+  const ok=await mutate(()=>request(`/pos/drafts/${current.draft.id}/status`,{method:'PATCH',body:{status:next,expectedVersion:current.draft.version,requestKey:uuid(),...(next==='HELD'?{createNext:true}:{})}}));
+  if(!ok)return;
+  if(next==='HELD'){
+   // Backend has already persisted the held order and returned a different,
+   // empty DRAFT in the same transaction. Do not clear this replacement cart.
+   resetOrderControls();
+   notify('Order held. A new empty order is ready.');
+  }else if(next==='DISCARDED'){
+   autoAttemptedRef.current=null;setCurrent(null);resetOrderControls();notify('Order discarded. Preparing a new order.');
+  }else {setPreview(null);notify('Order resumed.');}
+ }
+ // Recalculate whenever the cart, discount or voucher changes; the server owns
+ // SST, reductions and BNM rounding. A response from an older cart is ignored.
+ useEffect(()=>{
+  if(!current){setPreview(null);setQuoteError('');setQuoteBusy(false);return;}
+  const d=discountCode.trim().toUpperCase(),v=voucherCode.trim().toUpperCase();
+  if(d&&v){setPreview(null);setQuoteBusy(false);setQuoteError('Discount and Voucher cannot be combined until the stacking policy is configured.');return;}
+  let cancelled=false;
+  setPreview(null);setQuoteError('');setQuoteBusy(true);
+  const timer=setTimeout(async()=>{
+   try{
+    const result=await request(`/pos/drafts/${current.draft.id}/quote`,{method:'POST',body:{discountCode:d,voucherCode:v}});
+    if(!cancelled)setPreview(result);
+   }catch(e){if(!cancelled)setQuoteError(readableError(e.message));}
+   finally{if(!cancelled)setQuoteBusy(false);}
+  },d||v?500:120);
+  return ()=>{cancelled=true;clearTimeout(timer);};
+ },[current?.draft?.id,current?.draft?.version,current?.draft?.status,current?.lines.length,discountCode,voucherCode,taxRefreshKey]);
+ async function showAudit(){if(!current)return;try{const result=await request(`/pos/drafts/${current.draft.id}/audit`);setAudit(result.logs);}catch(e){notify(readableError(e.message),true);}}
+ function scan(e){e.preventDefault();const code=barcode.trim();if(!code)return;const found=bootstrap.products.find(p=>p.barcode===code||p.sku?.toUpperCase()===code.toUpperCase());if(!found)return notify('Barcode or SKU not found in this tenant.',true);if(found.product_structure!=='SINGLE')return notify('This product requires the packaging/composition adapter.',true);void add(found);setBarcode('');scannerRef.current?.focus();}
+ return <main className="page pos-terminal" data-pos-mode={businessMode.mode} data-business-type={businessMode.businessType}>
+  <header className="pos-terminal-header"><div className="pos-title-group"><span className="pos-title-icon">{isFnb?<UtensilsCrossed size={23}/>:<Store size={23}/>}</span><div><p className="eyebrow">OPERATIONS / POS TERMINAL</p><h1>POS Terminal</h1><p className="pos-subheading">{profile.business.name} <span>·</span> {selectedBusiness} <span>·</span> {isFnb?'Food & Beverage':'Retail Counter'}</p></div></div><div className="pos-header-actions"><Pill tone={activeShift?'success':'warning'}>{activeShift?`Shift #${activeShift.id} OPEN`:'No open shift'}</Pill><IconAction icon={RefreshCw} title="Refresh POS" disabled={loading||busy} onClick={()=>{autoAttemptedRef.current=null;setTaxRefreshKey(n=>n+1);refreshPage(load,notify);}}/><IconAction icon={History} title="Order Activity Log" disabled={!current} onClick={showAudit}/><IconAction icon={FolderOpen} title="Held / Saved Orders" onClick={()=>setShowHeld(true)}/></div></header>
+  <div className="pos-operating-bar"><div className="pos-branch"><span>BRANCH / CASH SHIFT</span><select aria-label="Select branch with open cash shift" disabled={busy||Boolean(current)} value={branchId} onChange={e=>setBranchId(e.target.value)}><option value="">Select open shift</option>{bootstrap.openShifts.map(s=><option value={s.branch_id} key={s.id}>{s.branch_name} · Shift #{s.id}</option>)}</select></div><div className="pos-user-meta"><span>CASHIER</span><strong>{profile.user.fullName}</strong><small>{currentBranch?.name||'Open a Cash Shift to begin'}</small></div><div className="pos-type-meta"><span>ORDER TYPE</span><div className="pos-order-switch"><button type="button" className="chosen" title="Counter / Take Away" aria-pressed="true" onClick={()=>setOrderScope('TAKE_AWAY')}>{isFnb?'Take Away':'Counter Sale'}</button>{businessMode.hasTables&&<button type="button" disabled title="Dine In requires Restaurant Tables integration" onClick={()=>{}}>Dine In <Lock size={12}/></button>}</div></div></div>
+  <div className="pos-terminal-layout"><section className="pos-product-zone" aria-label={isFnb?'Menu catalog':'Product catalog'}>
+   <div className="pos-catalog-toolbar"><div><h2>{isFnb?'Menu & Products':'Products'}</h2><p>Choose an item to add to the current order</p></div><span className="pos-product-count">{products.length} items</span></div>
+   <div className="pos-search-row"><form className="pos-scan-control" onSubmit={scan}><ScanBarcode size={19}/><input aria-label="Scan barcode or type SKU" placeholder="Scan barcode / enter SKU" ref={scannerRef} value={barcode} onChange={e=>setBarcode(e.target.value)}/><button type="submit" disabled={locked||busy} title="Add scanned item">Add</button></form><label className="pos-search-control"><Search size={19}/><input aria-label="Search POS Products" placeholder={isFnb?'Search menu name or SKU...':'Search product, SKU or barcode...'} value={search} onChange={e=>setSearch(e.target.value)}/>{search&&<button type="button" onClick={()=>setSearch('')} title="Clear search" aria-label="Clear search"><X size={16}/></button>}</label></div>
+   <div className="pos-category-tabs" role="group" aria-label="Product Categories"><button className={category==='ALL'?'active':''} type="button" onClick={()=>setCategory('ALL')}><Layers3 size={16}/>All Categories</button>{allCategories.map(c=><button type="button" key={c.id} className={category===String(c.id)?'active':''} onClick={()=>setCategory(String(c.id))}>{c.category_name}</button>)}</div>
+   <div className="pos-product-tiles" aria-live="polite">{products.map(p=>{const hasPrice=priceMap.has(String(p.id));const price=hasPrice?priceMap.get(String(p.id)):p.selling_price;const available=p.product_structure==='SINGLE';const inCart=currentQty.get(String(p.id));const hasImage=String(p.product_image_url||'').startsWith('tpos-image:');return <button type="button" className={`pos-product-tile ${!available?'pos-tile-unavailable':''}`} key={p.id} title={available?`Add ${p.product_name}`:'Structure adapter not yet connected'} aria-label={`Add ${p.product_name}, ${money(price)}`} disabled={locked||busy||!available} onClick={()=>add(p)}><div className="pos-tile-thumb">{hasImage?<img loading="lazy" src={`${imageBase}/api/v2/products/${p.id}/image`} alt=""/>:<Package size={31}/>}{inCart>0&&<span className="pos-in-cart">{inCart} in order</span>}</div><div className="pos-tile-content"><strong>{p.product_name}</strong><small>{categoryMap.get(String(p.category_id))||'Uncategorized'} · {p.base_unit_code}</small><div className="pos-tile-bottom"><b>{money(price)}</b>{available?<span className="pos-add-badge"><Plus size={16}/></span>:<span className="pos-addon-note">Not ready</span>}</div></div></button>;})}{!products.length&&<div className="pos-product-empty"><Box size={30}/><strong>No matching products</strong><span>Try another search or category</span></div>}</div>
+  </section>
+  <aside className="pos-order-zone" aria-label="Current POS Order"><div className="pos-order-head"><div><span className="pos-overline">CURRENT ORDER</span><h2><ShoppingCart size={21}/> {current?`Order #${current.draft.id}`:'New Order'}</h2></div><Pill tone={current?.draft?.status==='HELD'?'warning':current?'success':'neutral'}>{current?.draft?.status==='HELD'?'HELD':current?'IN PROGRESS':'EMPTY'}</Pill></div>
+   <div className="pos-order-info"><div><span>Order Type</span><strong>{isFnb?'Take Away':'Counter Sale'}</strong></div><div><span>Items</span><strong>{Number(totalItems).toFixed(totalItems%1?3:0)}</strong></div><div><span>Branch</span><strong>{current?.draft?.branch_name||currentBranch?.name||'—'}</strong></div></div>
+   {businessMode.hasTables&&<div className="pos-table-section"><Table2 size={17}/><div><strong>Restaurant Tables</strong><small>Table assignment will connect to Restaurant Tables before Dine In is enabled.</small></div><Lock size={16}/></div>}
+   <div className="pos-order-lines">{!current?<div className="pos-order-empty"><ShoppingCart size={35}/><strong>Preparing your order</strong><p>{activeShift?'Your order is being prepared automatically.':'Open a Cash Shift to begin.'}</p></div>:!currentLines.length?<div className="pos-order-empty"><Package size={31}/><strong>No products added</strong><p>Select a product from the left to build this order.</p></div>:currentLines.map(line=><div className="pos-order-line" key={line.id}><div className="pos-line-main"><strong>{line.product_name}</strong><span>{line.sku||'—'} · {money(line.unitPrice)} / {line.unit_code}</span></div><b className="pos-line-total">{money(line.lineTotal)}</b><div className="pos-line-edit"><button type="button" title="Decrease" disabled={busy||locked||Number(line.quantity)<=1} onClick={()=>change(line,String(Number(line.quantity)-1))}><Minus size={15}/></button><strong>{Number(line.quantity)}</strong><button type="button" title="Increase" disabled={busy||locked} onClick={()=>change(line,String(Number(line.quantity)+1))}><Plus size={15}/></button><button type="button" className="pos-remove-line" title="Remove line" disabled={busy||locked} onClick={()=>change(line,null,true)}><Trash2 size={15}/></button></div></div>)}</div>
+   <div className="pos-order-totals"><div><span>Subtotal</span><b>{money(current?.subtotal)}</b></div><div><span>Discount / Voucher</span><button type="button" className="pos-apply-toggle" aria-expanded={showAdjustments} aria-controls="pos-discount-fields" onClick={()=>setShowAdjustments(x=>!x)} disabled={!current} title="Show Discount / Voucher fields"><Tag size={15}/> {showAdjustments?'Hide':'Apply'}</button></div><div><span>Sales / Services Tax</span><button type="button" className="pos-apply-toggle" aria-expanded={showTaxDetails} aria-controls="pos-tax-details" onClick={()=>setShowTaxDetails(x=>!x)} disabled={!current} title="Show Sales / Services Tax details"><Layers3 size={15}/> {showTaxDetails?'Hide':'Apply'}</button></div></div>
+   {showAdjustments&&<DiscountFields discountCode={discountCode} setDiscountCode={setDiscountCode} voucherCode={voucherCode} setVoucherCode={setVoucherCode} disabled={locked||busy}/>}
+   {preview?.serviceCharge&&<div className="pos-service-charge-info" title="Merchant fee; separate from JKDM Service Tax">Service Charge: {preview.serviceCharge.applicable?`ON · ${Number(preview.serviceCharge.rate).toFixed(2)}%`:preview.serviceCharge.enabled?"OFF for this order type":"OFF"}</div>}
+   {preview?.sst&&<div className="pos-sst-summary" aria-label="Live GST SST Settings"><SstStatus label="Sales Tax" setting={preview.sst.salesTax}/><SstStatus label="Service Tax" setting={preview.sst.serviceTax}/></div>}
+   {showTaxDetails&&<TaxDetails bill={preview?.bill} sst={preview?.sst}/>}
+   <BillBreakdown bill={preview?.bill} quoteError={quoteError} quoteBusy={quoteBusy} sst={preview?.sst} serviceCharge={preview?.serviceCharge}/>
+   <div className="pos-order-footer"><div className="pos-actions-secondary">{current&&<><button type="button" className="outline" disabled={busy} onClick={()=>status(current.draft.status==='HELD'?'DRAFT':'HELD')}>{current.draft.status==='HELD'?<PlayCircle size={17}/>:<PauseCircle size={17}/>} {current.draft.status==='HELD'?'Resume':'Hold'}</button><button type="button" className="outline pos-discard" disabled={busy} onClick={()=>status('DISCARDED')}><Trash2 size={17}/> Discard</button></>}</div><button type="button" className="pos-pay-button" disabled={!current||!currentLines.length||busy} onClick={()=>setShowPayment(true)}><Wallet size={19}/>Payment / Checkout <ArrowRight size={18}/></button></div>
+  </aside></div>
+  <p className="pos-integration-note"><ShieldAlert size={17}/> POS sales checkout is not yet connected to inventory posting, confirmed payments, tax and receipts. Orders shown here are persisted carts, not sales. {isFnb?'Dine In and table operations are not yet enabled.':''}</p>
+  {showHeld&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setShowHeld(false);}}><div className="dialog wide pos-held-dialog"><div className="dialog-head"><div><p className="eyebrow">POS TERMINAL</p><h2>Held / Saved Orders</h2></div><IconAction icon={X} title="Close saved orders" onClick={()=>setShowHeld(false)}/></div><div className="pos-saved-orders">{drafts.map(d=><button type="button" key={d.id} className="pos-saved-order" onClick={()=>selectDraft(d)}><div><b>Order #{d.id}</b><span>{d.branch_name} · {d.status}</span></div><span>{d.updated_at}</span><ChevronRight size={18}/></button>)}{!drafts.length&&<div className="pos-product-empty"><FolderOpen size={28}/><strong>No saved orders</strong></div>}</div></div></div>}
+  {showPayment&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setShowPayment(false);}}><div className="dialog pos-payment-dialog"><div className="dialog-head"><div><p className="eyebrow">POS / CHECKOUT</p><h2>Payment Methods</h2></div><IconAction icon={X} title="Close payment" onClick={()=>setShowPayment(false)}/></div><div className="pos-payment-total"><small>Total</small><strong>{preview?.bill?money(preview.bill.total):'—'}</strong></div><p className="muted">Enabled methods for this tenant and branch:</p><div className="pos-payment-methods">{visibleMethods.map(m=><div className="pos-pay-method" key={m.method_code}><Wallet size={17}/>{PAY_NAMES[m.method_code]||m.method_code}<Lock size={15}/></div>)}{!visibleMethods.length&&<p className="muted">No enabled methods for this branch.</p>}</div><div className="pos-blocked"><Lock size={21}/><div><strong>Checkout locked until integrations are verified</strong><p>Payment selection is displayed from branch settings. It cannot mark an order PAID, deduct stock, redeem vouchers or post a sale until the transactional checkout and settlement adapters are ready.</p></div></div><div className="dialog-actions"><button className="outline" type="button" onClick={()=>setShowPayment(false)}>Close</button></div></div></div>}
+  {audit&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setAudit(null);}}><div className="dialog wide"><div className="dialog-head"><h2>POS Order Activity Log</h2><IconAction icon={X} title="Close activity log" onClick={()=>setAudit(null)}/></div><div className="table-scroll"><table><thead><tr><th>Time (UTC)</th><th>Action</th><th>Actor</th><th>Details</th></tr></thead><tbody>{audit.map(a=><tr key={a.id}><td>{a.created_at}</td><td>{a.action_type}</td><td>{a.actor_name}</td><td>{typeof a.details==='string'?a.details:JSON.stringify(a.details)}</td></tr>)}{!audit.length&&<tr><td colSpan="4">No activity.</td></tr>}</tbody></table></div></div></div>}
+ </main>;
+}

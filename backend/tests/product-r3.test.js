@@ -23,7 +23,7 @@ test('R3 8 MiB parser boundary applies to Preview and Confirm',()=>{
 });
 test('R3 import accepts R1 21-column and R2 25-column formats',()=>{
  const sample=row(1).split(',');
- for(const count of [21,25,28]){
+ for(const count of [21,25,28,29]){
   const data=PRODUCT_CSV_HEADERS.slice(0,count).join(',')+'\n'+sample.slice(0,count).join(',')+'\n';
   const [result]=parseProductCsv(data);
   assert.equal(result.data.productStructure,'SINGLE');
@@ -31,9 +31,9 @@ test('R3 import accepts R1 21-column and R2 25-column formats',()=>{
  }
 });
 test('R3 distinct JKDM SST fields roundtrip in CSV and template',()=>{
- assert.equal(PRODUCT_CSV_HEADERS.length,28);
- assert.match(productCsvTemplate(),/jkdm_tax_type,jkdm_tax_rate,jkdm_tax_inclusive/);
- const data=csv(1).replace(',NONE,0.00,NO\r\n',',SALES_TAX,10.00,YES\r\n');
+ assert.equal(PRODUCT_CSV_HEADERS.length,29);
+ assert.match(productCsvTemplate(),/jkdm_tax_type,jkdm_tax_rate,jkdm_tax_inclusive,is_kpdn_controlled/);
+ const data=csv(1).replace(',NONE,0.00,NO,\r\n',',SALES_TAX,10.00,YES,\r\n');
  const [item]=parseProductCsv(data);
  assert.equal(item.data.jkdmTaxType,'SALES_TAX');
  assert.equal(item.data.jkdmTaxRate,'10.00');

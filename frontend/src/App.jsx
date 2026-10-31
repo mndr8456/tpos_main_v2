@@ -1,4 +1,9 @@
+import {refreshPage} from './refresh-page.js';
 import CashDrawer from './CashDrawer.jsx';
+import PaymentMethods from './PaymentMethods.jsx';
+import SstSettings from './SstSettings.jsx';
+import ServiceChargeSettings from './ServiceChargeSettings.jsx';
+import PosTerminal from './PosTerminal.jsx';
 import { useCallback,useEffect,useMemo,useState } from 'react';
 import { Menu,Users,Shield,LogOut,Plus,Search,LockKeyhole,UnlockKeyhole,RefreshCw,Download,History,Upload,Pencil,KeyRound, X,Building2,Eye,EyeOff,LayoutDashboard } from 'lucide-react';
 import { request } from './api.js';
@@ -11,7 +16,7 @@ import Products from './Products.jsx';
 import Discounts from './Discounts.jsx';
 import Vouchers from './Vouchers.jsx';
 import CashShifts from './CashShifts.jsx';
-import { BadgePercent,Ticket,Wallet,Archive } from 'lucide-react';
+import { BadgePercent,Ticket,Wallet,Archive, CreditCard,ShoppingCart,ReceiptText,ChevronDown } from 'lucide-react';
 
 const types=['RESTAURANT','GROCERY','RETAIL','MINI_MARKET','CAFE','FOOD_TRUCK','STREET_FOOD'];
 const regFields=[['businessName','Registered Business Name'],['ssmRegistrationNumber','SSM Registration Number'],['ssmOldRegistrationNumber','Old SSM (optional)'],['tin','TIN (optional)'],['sstSalesTaxNumber','SST Number Sales Tax (optional)'],['sstServiceTaxNumber','SST Number Service Tax (optional)'],['phone','Business Phone (optional)'],['addressLine1','Address Line 1'],['addressLine2','Address Line 2 (optional)'],['city','City'],['postcode','Postcode'],['state','State'],['ownerName','Owner Full Name'],['ownerEmail','Owner Email'],['ownerPassword','Owner Password']];
@@ -115,7 +120,7 @@ function UsersView({profile,notify,onAccountEmailChanged}){
  async function audit(){try{const result=await request('/users/audit/logs');setLogs(result.logs);setShowAudit(true);}catch(e){notify(e.message,true);}}
  return <div className="page"><div className="page-head"><div><p className="eyebrow">PEOPLE / ACCESS MANAGEMENT</p><h1>Users</h1><p className="muted">Manage identities, roles, branch access and security.</p></div><div className="actions">{canAudit&&<button className="outline action-icon" aria-label="Activity Log" title="Activity Log" onClick={audit}><History size={19}/></button>}{canManage&&<button className="outline action-icon" aria-label="Import Users" title="Import Users" onClick={()=>setShowImport(true)}><Upload size={19}/></button>}<button className="outline action-icon" aria-label="Export Users CSV" title="Export Users CSV" onClick={()=>exportUsersCsv(filtered)}><Download size={19}/></button>{canManage&&<button className="primary action-icon" aria-label="Add User" title="Add User" onClick={()=>setEditing('new')}><Plus size={19}/></button>}</div></div>
  <div className="stat-grid"><div className="stat"><Users size={19}/><span>Total Users</span><b>{counts.total}</b></div><div className="stat"><Shield size={19}/><span>Active</span><b>{counts.active}</b></div><div className="stat"><LockKeyhole size={19}/><span>Locked Accounts</span><b>{counts.locked}</b></div><div className="stat"><span>Inactive</span><b>{counts.inactive}</b></div></div>
- <div className="table-panel"><div className="tools"><div className="search"><Search size={17}/><input aria-label="Search users" placeholder="Search users, email or role..." value={query} onChange={e=>setQuery(e.target.value)}/></div><select aria-label="Filter users" value={filter} onChange={e=>setFilter(e.target.value)}><option value="ALL">All Status</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option><option value="LOCKED">Locked</option></select><button className="icon-button" title="Refresh" onClick={load} disabled={loading}><RefreshCw size={18}/></button></div>
+ <div className="table-panel"><div className="tools"><div className="search"><Search size={17}/><input aria-label="Search users" placeholder="Search users, email or role..." value={query} onChange={e=>setQuery(e.target.value)}/></div><select aria-label="Filter users" value={filter} onChange={e=>setFilter(e.target.value)}><option value="ALL">All Status</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option><option value="LOCKED">Locked</option></select><button className="icon-button" title="Refresh" onClick={()=>refreshPage(load,notify)} disabled={loading}><RefreshCw size={18}/></button></div>
  <div className="table-scroll"><table><thead><tr>{['#','User','Username','Role','Branch','Status','Last Login','Security','Actions'].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{filtered.map((u,index)=>{
   const locked=u.locked_until&&new Date(u.locked_until.replace(' ','T')+'Z').getTime()>Date.now();
   return <tr key={u.id}><td>{index+1}</td><td><strong>{u.full_name}</strong><small>{u.email}</small></td><td>{u.username}</td><td>{u.role_code}</td><td>{u.branch_name||'—'}</td><td><span className={`pill ${u.status==='ACTIVE'?'good':'off'}`}>{u.status}</span></td><td>{formatted(u.last_login_at)}</td><td>{locked?<span className="pill warn">LOCKED</span>:u.must_change_password?<span className="pill warn">PASSWORD CHANGE</span>:<span className="pill good">NORMAL</span>}</td><td><div className="row-actions">{canManage&&u.role_code!=='OWNER'&&String(profile.user.id)!==String(u.id)&&<><button aria-label={`Edit ${u.full_name}`} title="Edit User" onClick={()=>setEditing(u)}><Pencil size={16}/></button><button aria-label={`Reset password for ${u.full_name}`} title="Reset Password" onClick={()=>resetPassword(u)}><KeyRound size={16}/></button></>}{(String(profile.user.id)===String(u.id)||(canEditOthersEmail&&u.role_code!=='OWNER'&&!canManage))&&<button aria-label={`Change email for ${u.full_name}`} title="Change Email" onClick={()=>setEmailEditing(u)}><Pencil size={16}/></button>}{canManage&&locked&&<button aria-label={`Unlock ${u.full_name}`} title="Unlock User" onClick={()=>unlock(u)}><UnlockKeyhole size={16}/></button>}</div></td></tr>;
@@ -132,7 +137,7 @@ function PasswordView({onDone,notify}){
  return <div className="page"><div className="table-panel narrow"><h2>Change your password</h2><p className="muted">A new password is required before you can access other modules.</p><form className="auth-form" onSubmit={submit}><Field type="password" label="Current Password" required value={current} onChange={setCurrent}/><Field type="password" label="New Password (12+ characters, letters and numbers)" required value={next} onChange={setNext}/><button disabled={busy} type="submit" className="primary">Change Password</button></form></div></div>;
 }
 export function App(){
- const [profile,setProfile]=useState(null),[loading,setLoading]=useState(true),[sidebar,setSidebar]=useState(false),[notice,setNotice]=useState({error:'',message:''}),[page,setPage]=useState('dashboard'),[selfEmailEdit,setSelfEmailEdit]=useState(false),[selfEmailBusy,setSelfEmailBusy]=useState(false);
+ const [profile,setProfile]=useState(null),[loading,setLoading]=useState(true),[sidebar,setSidebar]=useState(false),[notice,setNotice]=useState({error:'',message:''}),[page,setPage]=useState('dashboard'),[openNavGroups,setOpenNavGroups]=useState({"Master Data":true,"Transactions":true,"Settings":true}),[selfEmailEdit,setSelfEmailEdit]=useState(false),[selfEmailBusy,setSelfEmailBusy]=useState(false);
  const notify=useCallback((message,error=false)=>setNotice(error?{error:message,message:''}:{error:'',message}),[]);
  useEffect(()=>{request('/auth/me').then(p=>{setProfile(p);setPage(landingPage(p));}).catch(()=>{}).finally(()=>setLoading(false));},[]);
  // Keep the menu open until the hamburger is clicked again, outside is clicked, or Escape is pressed.
@@ -154,12 +159,56 @@ export function App(){
  const canViewVouchers=profile.user.permissions.includes('vouchers.view');
  const canViewCashShifts=profile.user.permissions.includes('cash_shifts.view');
  const canViewCashDrawer=profile.user.permissions.includes('cash_drawer.view');
+ const canViewPayments=profile.user.permissions.includes('payment_methods.view');
+ const canViewSst=profile.user.permissions.includes('sst_settings.view');
+ const canViewServiceCharge=profile.user.permissions.includes('service_charge.view');
+ const canViewPos=profile.user.permissions.includes('pos.view');
+ // Follow the V1 order for implemented modules. Unbuilt V1 modules have no broken links.
+ // Visibility is derived from the authenticated tenant's permission grants, not a static role.
+ const navigationGroups=[
+  {title:'Master Data',entries:[
+   {id:'users',label:'Users',icon:Users,show:hasView},
+   {id:'categories',label:'Categories',icon:Tags,show:canViewCategories},
+   {id:'products',label:'Products',icon:Package,show:canViewProducts},
+   {id:'suppliers',label:'Suppliers',icon:Truck,show:canViewSuppliers},
+   {id:'vouchers',label:'Customer Vouchers',icon:Ticket,show:canViewVouchers},
+   {id:'discounts',label:'Discounts',icon:BadgePercent,show:canViewDiscounts},
+   {id:'cash-shifts',label:'Cash Shifts',icon:Wallet,show:canViewCashShifts}
+  ]},
+  {title:'Transactions',entries:[
+   {id:'pos',label:'POS Terminal',icon:ShoppingCart,show:canViewPos},
+   {id:'cash-drawer',label:'Log Cash Drawer',icon:Archive,show:canViewCashDrawer}
+  ]},
+  {title:'Settings',entries:[
+   {id:'payment-methods',label:'Payment Methods',icon:CreditCard,show:canViewPayments},
+   {id:'sst-settings',label:'GST / SST Settings',icon:Shield,show:canViewSst},
+   {id:'service-charge',label:'Service Charge Settings',icon:ReceiptText,show:canViewServiceCharge}
+  ]}
+ ].map(group=>({...group,entries:group.entries.filter(entry=>entry.show)})).filter(group=>group.entries.length);
+ const navigate=next=>{
+  setPage(next);
+  // V1 desktop navigation remains open until the hamburger is pressed again.
+  // On narrow/mobile screens the overlay closes after a selection.
+  if(window.matchMedia('(max-width: 900px)').matches)setSidebar(false);
+ };
+ const navItem=(entry)=>{const ItemIcon=entry.icon;return <button key={entry.id} type="button" className={page===entry.id?'nav active':'nav'} aria-current={page===entry.id?'page':undefined} onClick={()=>navigate(entry.id)}><ItemIcon size={18}/><span>{entry.label}</span></button>;};
  return <div className="workspace">
  {sidebar&&<button type="button" className="sidebar-scrim" aria-label="Close navigation" onClick={()=>setSidebar(false)} tabIndex={-1}/>}
- <aside id="workspace-navigation" aria-label="Workspace navigation" className={sidebar?'sidebar open':'sidebar'}><div className="side-brand">TPOS <span>V2</span></div><p className="side-label">WORKSPACE</p>{canViewDashboard&&<button className={page==='dashboard'?'nav active':'nav'} onClick={()=>{setPage('dashboard');setSidebar(false);}}><LayoutDashboard size={18}/> Dashboard</button>}<button className={page==='users'?'nav active':'nav'} onClick={()=>{setPage('users');setSidebar(false);}} disabled={!hasView}><Users size={18}/> Users</button><button className={page==='categories'?'nav active':'nav'} onClick={()=>{setPage('categories');setSidebar(false);}} disabled={!canViewCategories}><Tags size={18}/> Categories</button>{canViewSuppliers&&<button className={page==='suppliers'?'nav active':'nav'} onClick={()=>{setPage('suppliers');setSidebar(false);}}><Truck size={18}/> Suppliers</button>}{canViewProducts&&<button className={page==='products'?'nav active':'nav'} onClick={()=>{setPage('products');setSidebar(false);}}><Package size={18}/> Products</button>}{canViewDiscounts&&<button className={page==='discounts'?'nav active':'nav'} onClick={()=>{setPage('discounts');setSidebar(false);}}><BadgePercent size={18}/> Discounts</button>}{canViewVouchers&&<button className={page==='vouchers'?'nav active':'nav'} onClick={()=>{setPage('vouchers');setSidebar(false);}}><Ticket size={18}/> Vouchers</button>}{canViewCashShifts&&<button className={page==='cash-shifts'?'nav active':'nav'} onClick={()=>{setPage('cash-shifts');setSidebar(false);}}><Wallet size={18}/> Cash Shifts</button>}{canViewCashDrawer&&<button className={page==='cash-drawer'?'nav active':'nav'} onClick={()=>{setPage('cash-drawer');setSidebar(false);}}><Archive size={18}/> Log Cash Drawer</button>}</aside>
+ <aside id="workspace-navigation" aria-label="Workspace navigation" className={sidebar?'sidebar open':'sidebar'} aria-hidden={!sidebar} inert={!sidebar}>
+  <div className="sidebar-inner">
+   <div className="side-brand">TPOS <span>V2</span></div>
+   {canViewDashboard&&navItem({id:'dashboard',label:'Dashboard',icon:LayoutDashboard})}
+   {navigationGroups.map(group=><section key={group.title} className="side-group">
+    <button type="button" className="side-group-trigger" onClick={()=>setOpenNavGroups(current=>({...current,[group.title]:current[group.title]===false}))} aria-expanded={openNavGroups[group.title]!==false}>
+     <span>{group.title}</span><ChevronDown size={15} className={openNavGroups[group.title]===false?'collapsed':''}/>
+    </button>
+    {openNavGroups[group.title]!==false&&<div className="side-group-items">{group.entries.map(navItem)}</div>}
+   </section>)}
+  </div>
+ </aside>
  <div className="main-column"><header className="topbar"><div className="top-left"><button type="button" className="icon-button" aria-label={sidebar?"Close navigation":"Open navigation"} title={sidebar?"Close navigation":"Open navigation"} aria-controls="workspace-navigation" aria-expanded={sidebar} onClick={()=>setSidebar(current=>!current)}><Menu size={21}/></button><div className="workspace-name"><Building2 size={18}/><div><b>{profile.business.name}</b><small>{profile.user.role} / {profile.business.type||'Business'}</small></div></div></div><div className="top-right"><span>{profile.user.fullName}</span><button className="outline action-icon" title="Sign Out" aria-label="Sign Out" onClick={signOut}><LogOut size={19}/></button></div></header>
   <Notice error={notice.error} message={notice.message} onClose={()=>setNotice({error:'',message:''})}/>
-  {profile.user.mustChangePassword?<PasswordView onDone={()=>setProfile(null)} notify={notify}/>:page==='dashboard'&&canViewDashboard?<Dashboard profile={profile} onNavigate={next=>{setPage(next);setSidebar(false);}}/>:page==='categories'&&canViewCategories?<Categories profile={profile} notify={notify}/>:page==='suppliers'&&canViewSuppliers?<Suppliers profile={profile} notify={notify}/>:page==='products'&&canViewProducts?<Products profile={profile} notify={notify}/>:page==='discounts'&&canViewDiscounts?<Discounts profile={profile} notify={notify}/>:page==='vouchers'&&canViewVouchers?<Vouchers profile={profile} notify={notify}/>:page==='cash-shifts'&&canViewCashShifts?<CashShifts profile={profile} notify={notify}/>:page==='cash-drawer'&&canViewCashDrawer?<CashDrawer profile={profile} notify={notify}/>:hasView?<UsersView profile={profile} notify={notify} onAccountEmailChanged={()=>{setProfile(null);setSidebar(false);notify('Email changed. Sign in again using the new email.');}}/>:<main className="page"><h1>My Account</h1><p>Your account is active. User management requires explicit permission.</p><p>Login Email: {profile.user.email}</p><button className="outline" onClick={()=>setSelfEmailEdit(true)}>Change Email</button>{selfEmailEdit&&<EmailEditor original={{id:profile.user.id,email:profile.user.email,full_name:profile.user.fullName}} self={true} busy={selfEmailBusy} onCancel={()=>setSelfEmailEdit(false)} onSave={async data=>{setSelfEmailBusy(true);try{const result=await request(`/users/${profile.user.id}/email`,{method:'PATCH',body:data});setSelfEmailEdit(false);if(result.mustSignInAgain){setProfile(null);notify('Email changed. Sign in again using the new email.');}else notify('Email unchanged.');}catch(e){notify(e.message,true);}finally{setSelfEmailBusy(false);}}}/>}</main>}
+  {profile.user.mustChangePassword?<PasswordView onDone={()=>setProfile(null)} notify={notify}/>:page==='dashboard'&&canViewDashboard?<Dashboard profile={profile} notify={notify} onNavigate={navigate}/>:page==='categories'&&canViewCategories?<Categories profile={profile} notify={notify}/>:page==='suppliers'&&canViewSuppliers?<Suppliers profile={profile} notify={notify}/>:page==='products'&&canViewProducts?<Products profile={profile} notify={notify}/>:page==='discounts'&&canViewDiscounts?<Discounts profile={profile} notify={notify}/>:page==='vouchers'&&canViewVouchers?<Vouchers profile={profile} notify={notify}/>:page==='cash-shifts'&&canViewCashShifts?<CashShifts profile={profile} notify={notify}/>:page==='cash-drawer'&&canViewCashDrawer?<CashDrawer profile={profile} notify={notify}/>:page==='payment-methods'&&canViewPayments?<PaymentMethods profile={profile} notify={notify}/>:page==='sst-settings'&&canViewSst?<SstSettings profile={profile} notify={notify}/>:page==='service-charge'&&canViewServiceCharge?<ServiceChargeSettings profile={profile} notify={notify}/>:page==='pos'&&canViewPos?<PosTerminal profile={profile} notify={notify}/>:hasView?<UsersView profile={profile} notify={notify} onAccountEmailChanged={()=>{setProfile(null);setSidebar(false);notify('Email changed. Sign in again using the new email.');}}/>:<main className="page"><h1>My Account</h1><p>Your account is active. User management requires explicit permission.</p><p>Login Email: {profile.user.email}</p><button className="outline" onClick={()=>setSelfEmailEdit(true)}>Change Email</button>{selfEmailEdit&&<EmailEditor original={{id:profile.user.id,email:profile.user.email,full_name:profile.user.fullName}} self={true} busy={selfEmailBusy} onCancel={()=>setSelfEmailEdit(false)} onSave={async data=>{setSelfEmailBusy(true);try{const result=await request(`/users/${profile.user.id}/email`,{method:'PATCH',body:data});setSelfEmailEdit(false);if(result.mustSignInAgain){setProfile(null);notify('Email changed. Sign in again using the new email.');}else notify('Email unchanged.');}catch(e){notify(e.message,true);}finally{setSelfEmailBusy(false);}}}/>}</main>}
  <footer className="app-footer">© 2026 TPOS V2 — MNII Alpha Ent</footer>
  </div></div>;
 }

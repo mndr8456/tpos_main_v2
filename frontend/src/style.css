@@ -407,7 +407,7 @@
 /* Product R3: align LHDN inclusive checkbox beside Country of Origin, and space SST checkbox from its fields. */
 .product-lhdn-tax-checkbox{display:flex;align-items:flex-end;justify-content:flex-start;min-width:0}
 .product-lhdn-tax-checkbox .product-check{margin:0;min-height:41px}
-.product-sst-tax-checkbox{display:flex;align-items:center;justify-content:flex-start;margin-top:16px}
+.product-sst-tax-checkbox{display:flex;flex-direction:column;align-items:flex-start;gap:7px;justify-content:flex-start;margin-top:16px}
 .product-sst-tax-checkbox .product-check{margin:0}
 @media(max-width:580px){.product-lhdn-tax-checkbox{align-items:flex-start}}
 
@@ -547,3 +547,53 @@
 .user-email-dialog > .field + .field {
   margin-top: 16px;
 }
+
+/* Product KPDN controlled goods marker — no tax or stock side effects. */
+.product-kpdn-section{padding:0 0 10px}
+.product-kpdn-section>.muted{margin:0 0 12px;line-height:1.55}
+.product-kpdn-section .product-check{margin-top:2px}
+.product-kpdn-pill{display:inline-block;margin-left:8px;padding:2px 6px;border:1px solid #f0d4a0;border-radius:5px;background:#fff4dc;color:#945a0b;font-weight:800;font-size:10px;letter-spacing:.035em}
+
+/* Product SST: separate, mutually exclusive Sales Tax and Service Tax choices. */
+.product-sst-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+.product-sst-choice{display:flex;align-items:flex-start;gap:11px;border:1px solid #d6e1ef;border-radius:10px;padding:13px;cursor:pointer;min-width:0;background:#fff}
+.product-sst-choice.selected{background:#f0f6ff;border-color:#5287d8}
+.product-sst-choice input{width:17px;height:17px;accent-color:#1e60c6;margin:2px 0 0;flex-shrink:0}
+.product-sst-choice span{display:flex;flex-direction:column;gap:5px;min-width:0}
+.product-sst-choice strong{font-size:13px;color:#193a63}
+.product-sst-choice small{font-size:11px;line-height:1.5;color:#61758c}
+.product-sst-policy-note{font-size:12px;color:#687b94;margin:10px 0 0;line-height:1.5}
+@media(max-width:580px){.product-sst-choices{grid-template-columns:1fr}}
+
+/* V1-equivalent navigation: desktop hamburger moves with the docked sidebar.
+   Mobile uses an accessible overlay without squeezing the terminal or topbar. */
+.workspace .sidebar {position:sticky;top:0;left:auto;inset:auto;height:100vh;width:0;max-width:none;
+  padding:0;flex:0 0 auto;overflow:hidden;overflow-y:hidden;box-shadow:none;z-index:30;
+  transform:none;visibility:visible;pointer-events:none;transition:width 200ms ease;}
+.workspace .sidebar.open {width:258px;transform:none;pointer-events:auto;box-shadow:none;}
+.workspace .sidebar-inner {width:258px;height:100vh;overflow-y:auto;overscroll-behavior:contain;
+ padding:22px 13px 36px;scrollbar-width:thin;scrollbar-color:#46698a transparent;}
+.workspace .side-brand {margin:2px 10px 20px;}
+.workspace .side-group {margin:7px 0;}
+.workspace .side-group-trigger {width:100%;background:none;color:#9cb8d7;border:0;border-radius:8px;
+ display:flex;align-items:center;justify-content:space-between;padding:12px 11px 7px;
+ font-size:11px;font-weight:800;letter-spacing:1.1px;text-align:left;text-transform:uppercase;}
+.workspace .side-group-trigger:hover,.workspace .side-group-trigger:focus-visible {background:#123457;color:white;}
+.workspace .side-group-trigger svg {transition:transform 180ms ease;}
+.workspace .side-group-trigger svg.collapsed {transform:rotate(-90deg);}
+.workspace .side-group-items {display:grid;gap:2px;}
+.workspace .nav {font-size:13px;min-height:41px;white-space:nowrap;}
+.workspace .nav:hover,.workspace .nav:focus-visible {background:#123d70;color:#fff;}
+.workspace .nav.active {background:#1b548e;}
+.workspace .sidebar-scrim {display:none;}
+.workspace .main-column {min-width:0;min-height:100vh;flex:1 1 0%;}
+@media(max-width:900px){
+ .workspace .sidebar {position:fixed;inset:0 auto 0 0;width:258px;max-width:min(86vw,320px);
+   transform:translateX(-103%);visibility:hidden;pointer-events:none;z-index:51;
+   transition:transform 200ms ease,visibility 200ms;box-shadow:8px 0 28px #14294833;}
+ .workspace .sidebar.open {width:258px;max-width:min(86vw,320px);transform:translateX(0);
+   visibility:visible;pointer-events:auto;box-shadow:10px 0 28px #102a4f44;}
+ .workspace .sidebar-scrim {display:block;z-index:50;position:fixed;inset:0;
+   background:rgba(10,24,47,.25);border:0;cursor:pointer;}
+}
+@media(prefers-reduced-motion:reduce){.workspace .sidebar,.workspace .side-group-trigger svg{transition:none;}}

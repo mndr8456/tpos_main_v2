@@ -1,0 +1,31 @@
+TPOS MAIN V2 — Refresh Notification R1 (Changed Files Only)
+
+CHANGED FULL FILES
+ frontend/src/App.jsx
+ frontend/src/Dashboard.jsx
+ frontend/src/Categories.jsx
+ frontend/src/Suppliers.jsx
+ frontend/src/Products.jsx
+ frontend/src/Discounts.jsx
+ frontend/src/Vouchers.jsx
+ frontend/src/CashShifts.jsx
+ frontend/src/CashDrawer.jsx
+ frontend/src/PaymentMethods.jsx
+ frontend/src/api.js
+
+NEW FILES
+ frontend/src/refresh-page.js
+ backend/tests/refresh-notification-r1.test.js
+ docs/REFRESH_NOTIFICATION_R1_ACCEPTANCE.md
+ docs/REFRESH_NOTIFICATION_R1_MANIFEST.txt
+
+NO DATABASE/SQL, NO .ENV, NO CHANGES TO BACKEND BUSINESS LOGIC.
+Users, Dashboard, Categories, Suppliers, Products, Discounts, Vouchers,
+Cash Shifts, Cash Drawer and Payment Methods retain existing logic and permissions.
+
+SOURCE BASIS: TPOS Main V2 Payment Methods R1, with accepted R1.1 label fix;
+other accepted Change Email, Product KPDN and SST UI fixes preserved.
+
+Local validation: backend syntax PASS, regression 189/189 PASS,
+JSX/JS parse PASS, ZIP integrity PASS. Frontend Vite build NOT VERIFIED
+in test environment; run npm run build on user's PC.
