@@ -39,7 +39,7 @@ export async function registerTenant(request,response) {
   id=result.insertId;
   const dbName=tenantDatabase(id);
   await cp.execute('UPDATE tenants SET db_name=? WHERE id=?',[dbName,id]);
-  await adminPool().query(`CREATE DATABASE ${quoteIdentifier(dbName)} CHARACTER SET utf8mb4`);
+  await adminPool().query(`CREATE DATABASE ${quoteIdentifier(dbName)} CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci`);
   await executeSchema(dbName,'002_tenant_foundation.sql');
   await executeSchema(dbName,'003_tenant_users.sql');
   await executeSchema(dbName,'004_tenant_categories.sql');
@@ -59,8 +59,8 @@ export async function registerTenant(request,response) {
   return response.status(201).json({message:'TENANT_REGISTERED',businessName:data.businessName,loginEmail:data.ownerEmail});
  } catch(error){
   if(id) await cp.execute(`UPDATE tenants SET status='FAILED',last_error='Provisioning failed; administrator review required' WHERE id=?`,[id]).catch(()=>{});
-  console.error('TENANT_REGISTRATION_FAILED_STACK:', error);
   if(error.code==='ER_DUP_ENTRY') return response.status(409).json({error:'EMAIL_ALREADY_REGISTERED'});
-  return response.status(500).json({error:'PROVISIONING_FAILED',message:error.message || 'Server error'});
+  console.error('Tenant provisioning failed',{code:error.code || 'UNKNOWN',tenantId:id});
+  return response.status(500).json({error:'PROVISIONING_FAILED',message:'No existing tenant or database was removed. Ask administrator to review server logs.'});
  }
 }

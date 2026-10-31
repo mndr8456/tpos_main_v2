@@ -31,15 +31,8 @@ export function tenantPool(tenantId) {
 export async function executeSchema(dbName, filename) {
   quoteIdentifier(dbName);
   const sql = await readFile(new URL(`../../database/${filename}`, import.meta.url), 'utf8');
-  const connection = await mysql.createConnection({...settings.mysql, database:dbName, multipleStatements:false});
-  try {
-    const statements = sql.split(';').map(s => s.trim()).filter(Boolean);
-    for (const stmt of statements) {
-      await connection.query(stmt);
-    }
-  } finally { 
-    await connection.end(); 
-  }
+  const connection = await mysql.createConnection({...settings.mysql, database:dbName, multipleStatements:true});
+  try { await connection.query(sql); } finally { await connection.end(); }
 }
 export async function closePools() {
   await Promise.all([...(central ? [central.end()] : []), ...(admin ? [admin.end()] : []), ...[...pools.values()].map(x=>x.end())]);
