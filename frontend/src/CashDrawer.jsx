@@ -1,0 +1,42 @@
+import {useCallback,useEffect,useMemo,useState} from 'react';
+import {Archive,Plus,RefreshCw,Download,History,Search,X,Save,ShieldAlert,Eye} from 'lucide-react';
+import {request} from './api.js';
+
+const malaysiaTime=value=>{
+ if(!value)return '—';
+ const date=new Date(String(value).replace(' ','T')+'Z');
+ return Number.isNaN(date.getTime())?'—':new Intl.DateTimeFormat('en-MY',{timeZone:'Asia/Kuala_Lumpur',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(date);
+};
+const readableError=e=>({SHIFT_ALREADY_CLOSED:'This shift is already closed. Select an OPEN shift.',BRANCH_ACCESS_DENIED:'You are not assigned to this branch.',DRAWER_RECORD_DENIED:'You cannot record an opening on this shift.',DRAWER_REQUEST_KEY_CONFLICT:'This request key was already used. Refresh to review the log.'}[e?.message]||e?.message||'Request failed');
+function Action({icon:Icon,label,onClick,disabled=false,primary=false}){return <button className={`${primary?'primary':'outline'} action-icon`} type="button" aria-label={label} title={label} onClick={onClick} disabled={disabled}><Icon size={18}/></button>;}
+function RecordDialog({shifts,onClose,onSubmit,busy}){
+ const [shiftId,setShiftId]=useState(String(shifts[0]?.id??''));
+ const [reason,setReason]=useState('');
+ const [requestKey,setRequestKey]=useState(()=>crypto.randomUUID());
+ return <div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)onClose();}}><form className="dialog cash-drawer-dialog" onSubmit={e=>{e.preventDefault();onSubmit({shiftId:Number(shiftId),reason:reason.trim(),requestKey});}}>
+ <div className="dialog-head"><div><p className="eyebrow">CASH MANAGEMENT / DRAWER</p><h2>Record Drawer Opening</h2></div><Action icon={X} label="Close" onClick={onClose} disabled={busy}/></div>
+ <p className="drawer-caution"><ShieldAlert size={19}/> This records a drawer opening you have physically observed. It does NOT open a connected cash drawer or change the cash balance.</p>
+ <label className="field"><span>Open Cash Shift</span><select value={shiftId} required onChange={e=>{setShiftId(e.target.value);setRequestKey(crypto.randomUUID());}}>{shifts.map(s=><option key={s.id} value={s.id}>Shift #{s.id} · {s.cashier_name} · {s.branch_name}</option>)}</select></label>
+ <label className="field"><span>Reason for Opening (required, at least 8 characters)</span><textarea required minLength="8" maxLength="300" rows="3" value={reason} onChange={e=>{setReason(e.target.value);setRequestKey(crypto.randomUUID());}} placeholder="Example: Customer requested change; no cash moved"/></label>
+ <div className="dialog-actions"><Action icon={X} label="Cancel" onClick={onClose} disabled={busy}/><button className="primary" type="submit" disabled={busy||!shiftId||reason.trim().length<8}><Save size={18}/>Record Opening</button></div>
+ </form></div>;
+}
+function AuditDialog({logs,onClose}){return <div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}><div className="dialog wide cash-drawer-dialog"><div className="dialog-head"><div><p className="eyebrow">CASH DRAWER / ACTIVITY</p><h2>Drawer Activity Log</h2></div><Action icon={X} label="Close" onClick={onClose}/></div><div className="table-scroll drawer-log-table"><table><thead><tr><th>Time (MYT)</th><th>Shift</th><th>Action</th><th>Reason</th><th>Recorded By</th></tr></thead><tbody>{logs.map(x=><tr key={x.id}><td>{malaysiaTime(x.recorded_at)}</td><td>#{x.shift_id}</td><td>Manual open recorded</td><td>{x.reason}</td><td>{x.actor_name}</td></tr>)}{!logs.length&&<tr><td colSpan="5" className="empty">No drawer audit records.</td></tr>}</tbody></table></div></div></div>;}
+export default function CashDrawer({profile,notify}){
+ const allowed=code=>profile.user.permissions.includes(code);
+ const [meta,setMeta]=useState({shifts:[],scope:'OWN'});
+ const [events,setEvents]=useState([]),[search,setSearch]=useState(''),[shiftFilter,setShiftFilter]=useState('ALL');
+ const [recording,setRecording]=useState(false),[logs,setLogs]=useState(null),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true);
+ const load=useCallback(async()=>{setLoading(true);try{const [m,data]=await Promise.all([request('/cash-drawer/meta'),request('/cash-drawer')]);setMeta(m);setEvents(data.events);}catch(e){notify(readableError(e),true);}finally{setLoading(false);}},[notify]);
+ useEffect(()=>{load();},[load]);
+ const filtered=useMemo(()=>events.filter(e=>(shiftFilter==='ALL'||String(e.shift_id)===shiftFilter)&&`${e.branch_name} ${e.cashier_name} ${e.actor_name} ${e.reason} ${e.shift_id}`.toLowerCase().includes(search.toLowerCase())),[events,search,shiftFilter]);
+ const shifts=useMemo(()=>[...new Set(events.map(e=>String(e.shift_id)))],[events]);
+ async function record(values){setBusy(true);try{const result=await request('/cash-drawer',{method:'POST',body:values});notify(result.idempotent?'Opening already recorded.':'Drawer opening recorded. No cash balance was changed.');setRecording(false);await load();}catch(e){notify(readableError(e),true);}finally{setBusy(false);}}
+ async function showAudit(){try{const result=await request('/cash-drawer/audit');setLogs(result.logs);}catch(e){notify(readableError(e),true);}}
+ async function exportCsv(){try{const response=await fetch(`${import.meta.env.VITE_BACKEND_URL||'http://127.0.0.1:5100'}/api/v2/cash-drawer/export`,{credentials:'include'});if(!response.ok)throw Error('EXPORT_DENIED');const blob=await response.blob(),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='cash-drawer-log.csv';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){notify(readableError(e),true);}}
+ return <main className="page cash-drawer-page"><div className="page-head"><div><p className="eyebrow">OPERATIONS / CASH MANAGEMENT</p><h1>Log Cash Drawer</h1><p className="muted">Append-only drawer opening observations, linked to Cash Shifts and users.</p></div><div className="actions"><Action icon={RefreshCw} label="Refresh Drawer Log" onClick={load} disabled={loading}/>{allowed('cash_drawer.audit')&&<Action icon={History} label="Drawer Activity Log" onClick={showAudit}/>} {allowed('cash_drawer.export')&&<Action icon={Download} label="Export Drawer Log CSV" onClick={exportCsv}/>} {meta.shifts.length>0&&<Action icon={Plus} label="Record Drawer Opening" onClick={()=>setRecording(true)} primary/>}</div></div>
+ <div className="stat-grid"><div className="stat"><Archive size={19}/><span>Visible Events</span><b>{events.length}</b></div><div className="stat"><Eye size={19}/><span>Visibility</span><b className="drawer-scope">{meta.scope==='ALL'?'All Cashiers':'My Shifts'}</b></div><div className="stat"><Plus size={19}/><span>Open Shifts Available</span><b>{meta.shifts.length}</b></div><div className="stat"><ShieldAlert size={19}/><span>Drawer Hardware</span><b className="drawer-scope">Not Connected</b></div></div>
+ <p className="drawer-caution"><ShieldAlert size={18}/> R1 records manual observations only. It does not send an electrical signal to a drawer, count a POS sale, or adjust Cash In/Out.</p>
+ <div className="table-panel drawer-table"><div className="tools drawer-tools"><div className="search"><Search size={17}/><input aria-label="Search Drawer Events" value={search} placeholder="Search reason, shift, branch, actor..." onChange={e=>setSearch(e.target.value)}/></div><select aria-label="Filter Cash Shift" value={shiftFilter} onChange={e=>setShiftFilter(e.target.value)}><option value="ALL">All Shifts</option>{shifts.map(x=><option key={x} value={x}>Shift #{x}</option>)}</select></div><div className="table-scroll"><table><thead><tr>{['#','Time (MYT)','Shift','Branch','Cashier','Event','Reason','Recorded By'].map(label=><th key={label}>{label}</th>)}</tr></thead><tbody>{filtered.map(e=><tr key={e.id}><td>{e.id}</td><td>{malaysiaTime(e.recorded_at)}</td><td>#{e.shift_id}</td><td>{e.branch_name}</td><td>{e.cashier_name}</td><td><span className="pill good">MANUAL OPEN</span></td><td className="drawer-reason">{e.reason}</td><td>{e.actor_name}</td></tr>)}{!filtered.length&&<tr><td colSpan="8" className="empty">{loading?'Loading drawer events...':'No drawer events found.'}</td></tr>}</tbody></table></div></div>
+ {recording&&<RecordDialog shifts={meta.shifts} onClose={()=>setRecording(false)} onSubmit={record} busy={busy}/>} {logs&&<AuditDialog logs={logs} onClose={()=>setLogs(null)}/>}</main>;
+}

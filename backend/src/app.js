@@ -16,6 +16,7 @@ import {listDiscounts,exportDiscounts,discountMeta,createDiscount,updateDiscount
 import {discountCsvTemplate} from './discounts-csv.js';
 import {discountOwnerAdminOnly} from './discount-role-guard.js';
 import {shiftMeta,listShifts,shiftDetails,openShift,addShiftMovement,closeShift,shiftAudit,exportShifts} from './cash-shifts.js';
+import {cashDrawerMeta,listCashDrawer,recordCashDrawerOpen,cashDrawerAudit,exportCashDrawer} from './cash-drawer.js';
 import {voucherOwnerOnly} from './voucher-owner-guard.js';
 import {listVouchers,voucherMeta,createVoucher,updateVoucher,voucherStatus,archiveVoucher,voucherAudit,voucherPrintSettings,saveVoucherPrintSettings,previewVoucher,voucherCsvTemplate,exportVouchers,previewVoucherImport,importVouchers} from './vouchers.js';
 import {listProducts,exportProducts,productMeta,productStructure,createProduct,updateProduct,productStatus,archiveProduct,productAudit,listBranchPrices,saveBranchPrice,previewProductsImport,importProducts,productCsvTemplate,uploadProductImage,readProductImage} from './products.js';
@@ -46,6 +47,11 @@ export function createApp(){
  app.post('/api/v2/auth/change-password',authenticate,changePassword);
  app.get('/api/v2/dashboard/overview',authenticate,permitted('dashboard.view'),dashboardOverview);
 
+ app.get('/api/v2/cash-drawer/meta',authenticate,permitted('cash_drawer.view'),cashDrawerMeta);
+ app.get('/api/v2/cash-drawer',authenticate,permitted('cash_drawer.view'),listCashDrawer);
+ app.get('/api/v2/cash-drawer/audit',authenticate,permitted('cash_drawer.audit'),cashDrawerAudit);
+ app.get('/api/v2/cash-drawer/export',authenticate,permitted('cash_drawer.export'),exportCashDrawer);
+ app.post('/api/v2/cash-drawer',authenticate,recordCashDrawerOpen);
  app.get('/api/v2/cash-shifts/meta',authenticate,permitted('cash_shifts.view'),shiftMeta);
  app.get('/api/v2/cash-shifts',authenticate,permitted('cash_shifts.view'),listShifts);
  app.get('/api/v2/cash-shifts/export',authenticate,permitted('cash_shifts.export'),exportShifts);
