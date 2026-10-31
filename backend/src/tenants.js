@@ -59,8 +59,8 @@ export async function registerTenant(request,response) {
   return response.status(201).json({message:'TENANT_REGISTERED',businessName:data.businessName,loginEmail:data.ownerEmail});
  } catch(error){
   if(id) await cp.execute(`UPDATE tenants SET status='FAILED',last_error='Provisioning failed; administrator review required' WHERE id=?`,[id]).catch(()=>{});
+  console.error('TENANT_REGISTRATION_FAILED_STACK:', error);
   if(error.code==='ER_DUP_ENTRY') return response.status(409).json({error:'EMAIL_ALREADY_REGISTERED'});
-  console.error('Tenant provisioning failed',{code:error.code || 'UNKNOWN',tenantId:id});
-  return response.status(500).json({error:'PROVISIONING_FAILED',message:'No existing tenant or database was removed. Ask administrator to review server logs.'});
+  return response.status(500).json({error:'PROVISIONING_FAILED',message:error.message || 'Server error'});
  }
 }
