@@ -73,7 +73,7 @@ function UserForm({original,meta,onCancel,onSave,busy}){
 function EmailEditor({original,self,busy,onCancel,onSave}){
  const [email,setEmail]=useState(original.email);
  const [currentPassword,setCurrentPassword]=useState('');
- return <div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)onCancel();}}><form className="dialog" onSubmit={e=>{e.preventDefault();onSave({email,currentPassword:self?currentPassword:undefined});}}>
+ return <div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)onCancel();}}><form className="dialog user-email-dialog" onSubmit={e=>{e.preventDefault();onSave({email,currentPassword:self?currentPassword:undefined});}}>
   <div className="dialog-head"><h2>Change Email</h2><button type="button" className="icon-button" aria-label="Close" onClick={onCancel}><X size={20}/></button></div>
   <p className="muted">{original.full_name} — Login email. {self?'You will need to sign in again after this change.':'This user will need to sign in again after this change.'}</p>
   <Field label="Email" required type="email" value={email} onChange={setEmail}/>

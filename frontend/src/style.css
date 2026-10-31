@@ -542,3 +542,8 @@
 @media(max-width:520px){.shift-variance-preview{align-items:flex-start;flex-direction:column;gap:8px}}
 /* Log Cash Drawer R1: append-only observed opening, separate from cash movements. */
 .cash-drawer-page{max-width:100%;min-width:0}.drawer-table{min-width:0}.drawer-table table{min-width:1010px}.drawer-tools{flex-wrap:wrap}.drawer-tools select{max-width:180px;border:1px solid #cbd6e4;border-radius:9px;padding:10px;color:#284b71}.drawer-reason{max-width:290px;white-space:normal;overflow-wrap:anywhere}.drawer-caution{display:flex;align-items:flex-start;gap:9px;padding:13px 16px;background:#fff7e9;border:1px solid #f1dcad;border-radius:10px;color:#855816;font-size:12px;line-height:1.6;margin:18px 0}.drawer-caution svg{flex-shrink:0}.drawer-scope{font-size:16px!important}.cash-drawer-dialog{width:min(750px,100%)}.cash-drawer-dialog .field textarea{border:1px solid #cbd6e4;border-radius:9px;padding:10px 12px;font:inherit;resize:vertical}.cash-drawer-dialog .field select{border:1px solid #cbd6e4;border-radius:9px;padding:10px 12px;background:#fff;color:#244365}.drawer-log-table{max-height:55vh;overflow:auto}.drawer-log-table td{white-space:normal}
+
+/* Users: separate Email and Current Password in Change Email only. */
+.user-email-dialog > .field + .field {
+  margin-top: 16px;
+}
