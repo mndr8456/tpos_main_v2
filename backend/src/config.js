@@ -12,8 +12,8 @@ export const settings = {
     timezone: 'Z',
     dateStrings: true,
     decimalNumbers: false,
-    supportBigNumbers: true,
-    bigNumberStrings: true,
+    supportBigNumbers: false,
+    bigNumberStrings: false,
     connectionLimit: 8,
     waitForConnections: true,
     ssl: {
