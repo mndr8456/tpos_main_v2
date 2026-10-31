@@ -39,7 +39,7 @@ export async function registerTenant(request,response) {
   id=result.insertId;
   const dbName=tenantDatabase(id);
   await cp.execute('UPDATE tenants SET db_name=? WHERE id=?',[dbName,id]);
-  await adminPool().query(`CREATE DATABASE ${quoteIdentifier(dbName)} CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci`);
+  await adminPool().query(`CREATE DATABASE ${quoteIdentifier(dbName)} CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci`);
   await executeSchema(dbName,'002_tenant_foundation.sql');
   await executeSchema(dbName,'003_tenant_users.sql');
   await executeSchema(dbName,'004_tenant_categories.sql');
