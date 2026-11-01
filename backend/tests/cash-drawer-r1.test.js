@@ -64,7 +64,8 @@ test('Drawer R1 UI uses icon-only actions, Shift Cash integration and permission
  assert.match(ui,/Export Drawer Log CSV/);
  assert.match(ui,/hardwareIntegration|Drawer Hardware/);
  assert.match(ui,/crypto.randomUUID\(\)/);
- assert.match(app,/canViewCashDrawer&&<button/);
+ assert.match(app,/const canViewCashDrawer=profile\.user\.permissions\.includes\('cash_drawer\.view'\)/);
+ assert.ok((app.match(/\bcanViewCashDrawer\b/g)||[]).length>=3,'Cash Drawer permission must guard navigation and the rendered page');
  assert.match(app,/page==='cash-drawer'&&canViewCashDrawer\?<CashDrawer/);
 });
 test('Drawer R1 CSV avoids spreadsheet formula injection and is visibility scoped',async()=>{

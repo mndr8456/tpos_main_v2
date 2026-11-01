@@ -81,6 +81,7 @@ test('Cash Shift R1 UI supports live search, close, cash movements and scoped na
  assert.match(jsx,/Manual Cash Movement/);
  assert.match(jsx,/Close Cash Shift/);
  assert.match(jsx,/Shift Activity Log/);
- assert.match(app,/canViewCashShifts&&<button/);
+ assert.match(app,/const canViewCashShifts=profile\.user\.permissions\.includes\('cash_shifts\.view'\)/);
+ assert.ok((app.match(/\bcanViewCashShifts\b/g)||[]).length>=3,'Cash Shift permission must guard navigation and the rendered page');
  assert.match(app,/page==='cash-shifts'&&canViewCashShifts\?<CashShifts/);
 });

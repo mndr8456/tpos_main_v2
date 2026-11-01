@@ -181,50 +181,6 @@
   .auth-login { grid-template-columns: minmax(0, 55.5%) minmax(0, 44.5%); }
 }
 
-/* R7: workspace navigation floats over content instead of shifting the page.
-   Show on menu hover/focus/tap and auto-hide when leaving the sidebar. */
-.workspace .sidebar {
-  display: block;
-  position: fixed;
-  inset: 0 auto 0 0;
-  width: 238px;
-  max-width: min(86vw, 320px);
-  z-index: 41;
-  overflow-y: auto;
-  box-shadow: 12px 0 30px rgba(8, 30, 57, .18);
-  transform: translateX(-103%);
-  visibility: hidden;
-  pointer-events: none;
-  transition: transform 170ms ease, visibility 170ms;
-}
-.workspace .sidebar.open {
-  display: block;
-  transform: translateX(0);
-  visibility: visible;
-  pointer-events: auto;
-}
-.workspace .sidebar-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  background: transparent;
-  border: 0;
-  padding: 0;
-  cursor: default;
-}
-@media (max-width: 580px) {
-  .workspace .sidebar.open {
-    top: 0;
-    bottom: 0;
-    left: 0;
-    box-shadow: 12px 0 30px rgba(8, 30, 57, .25);
-  }
-  .workspace .sidebar-scrim { background: rgba(10, 24, 47, .18); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .workspace .sidebar { transition: none; }
-}
-
 /* Category Module R1: icon-only actions, accessible tooltip labels. */
 .category-dialog{display:grid;gap:14px}
 .category-dialog .dialog-head{margin-bottom:0}
@@ -565,35 +521,62 @@
 .product-sst-policy-note{font-size:12px;color:#687b94;margin:10px 0 0;line-height:1.5}
 @media(max-width:580px){.product-sst-choices{grid-template-columns:1fr}}
 
-/* V1-equivalent navigation: desktop hamburger moves with the docked sidebar.
-   Mobile uses an accessible overlay without squeezing the terminal or topbar. */
-.workspace .sidebar {position:sticky;top:0;left:auto;inset:auto;height:100vh;width:0;max-width:none;
-  padding:0;flex:0 0 auto;overflow:hidden;overflow-y:hidden;box-shadow:none;z-index:30;
-  transform:none;visibility:visible;pointer-events:none;transition:width 200ms ease;}
-.workspace .sidebar.open {width:258px;transform:none;pointer-events:auto;box-shadow:none;}
-.workspace .sidebar-inner {width:258px;height:100vh;overflow-y:auto;overscroll-behavior:contain;
+/* Fixed-height V1 navigation R1.2. Desktop reserves space for the sidebar so the
+   hamburger and content shift together, while a click outside closes it. The
+   fixed sidebar never follows the long POS document scroll. */
+.workspace{display:block;min-height:100vh;}
+.workspace .sidebar{display:block;position:fixed;top:0;left:0;bottom:0;inset:0 auto 0 0;
+ height:100vh;height:100dvh;width:0;max-width:none;overflow:hidden;padding:0;
+ z-index:30;box-shadow:none;transform:none;visibility:visible;pointer-events:none;
+ transition:width 200ms ease;}
+.workspace .sidebar.open{width:258px;pointer-events:auto;box-shadow:none;}
+.workspace .sidebar-inner{width:258px;height:100%;overflow-y:auto;overscroll-behavior:contain;
  padding:22px 13px 36px;scrollbar-width:thin;scrollbar-color:#46698a transparent;}
-.workspace .side-brand {margin:2px 10px 20px;}
-.workspace .side-group {margin:7px 0;}
-.workspace .side-group-trigger {width:100%;background:none;color:#9cb8d7;border:0;border-radius:8px;
+.workspace .side-brand{margin:2px 10px 20px;}
+.workspace .side-group{margin:7px 0;}
+.workspace .side-group-trigger{width:100%;background:none;color:#9cb8d7;border:0;border-radius:8px;
  display:flex;align-items:center;justify-content:space-between;padding:12px 11px 7px;
  font-size:11px;font-weight:800;letter-spacing:1.1px;text-align:left;text-transform:uppercase;}
-.workspace .side-group-trigger:hover,.workspace .side-group-trigger:focus-visible {background:#123457;color:white;}
-.workspace .side-group-trigger svg {transition:transform 180ms ease;}
-.workspace .side-group-trigger svg.collapsed {transform:rotate(-90deg);}
-.workspace .side-group-items {display:grid;gap:2px;}
-.workspace .nav {font-size:13px;min-height:41px;white-space:nowrap;}
-.workspace .nav:hover,.workspace .nav:focus-visible {background:#123d70;color:#fff;}
-.workspace .nav.active {background:#1b548e;}
-.workspace .sidebar-scrim {display:none;}
-.workspace .main-column {min-width:0;min-height:100vh;flex:1 1 0%;}
+.workspace .side-group-trigger:hover,.workspace .side-group-trigger:focus-visible{background:#123457;color:white;}
+.workspace .side-group-trigger svg{transition:transform 180ms ease;}
+.workspace .side-group-trigger svg.collapsed{transform:rotate(-90deg);}
+.workspace .side-group-items{display:grid;gap:2px;}
+.workspace .nav{font-size:13px;min-height:41px;white-space:nowrap;}
+.workspace .nav:hover,.workspace .nav:focus-visible{background:#123d70;color:#fff;}
+.workspace .nav.active{background:#1b548e;}
+.workspace .main-column{min-width:0;min-height:100vh;width:auto;margin-left:0;
+ transition:margin-left 200ms ease;}
+.workspace.sidebar-expanded .main-column{margin-left:258px;}
+.workspace .sidebar-scrim{display:none;}
 @media(max-width:900px){
- .workspace .sidebar {position:fixed;inset:0 auto 0 0;width:258px;max-width:min(86vw,320px);
-   transform:translateX(-103%);visibility:hidden;pointer-events:none;z-index:51;
-   transition:transform 200ms ease,visibility 200ms;box-shadow:8px 0 28px #14294833;}
- .workspace .sidebar.open {width:258px;max-width:min(86vw,320px);transform:translateX(0);
-   visibility:visible;pointer-events:auto;box-shadow:10px 0 28px #102a4f44;}
- .workspace .sidebar-scrim {display:block;z-index:50;position:fixed;inset:0;
-   background:rgba(10,24,47,.25);border:0;cursor:pointer;}
+ .workspace .sidebar{width:258px;max-width:min(86vw,320px);transform:translateX(-103%);
+  visibility:hidden;pointer-events:none;z-index:51;
+  transition:transform 200ms ease,visibility 200ms;box-shadow:8px 0 28px #14294833;}
+ .workspace .sidebar.open{width:258px;max-width:min(86vw,320px);transform:translateX(0);
+  visibility:visible;pointer-events:auto;box-shadow:10px 0 28px #102a4f44;}
+ .workspace.sidebar-expanded .main-column{margin-left:0;}
+ .workspace .sidebar-scrim{display:block;z-index:50;position:fixed;inset:0;
+  background:rgba(10,24,47,.25);border:0;cursor:pointer;}
 }
-@media(prefers-reduced-motion:reduce){.workspace .sidebar,.workspace .side-group-trigger svg{transition:none;}}
+@media(prefers-reduced-motion:reduce){.workspace .sidebar,.workspace .main-column,.workspace .side-group-trigger svg{transition:none;}}
+
+/* Discount / Voucher UI parity R1.2 — same controls, modal width, cards, grid and spacing. */
+.discount-page.voucher-page,.discount-table-panel.voucher-table-panel{min-width:0;max-width:100%;}
+.discount-table-scroll.voucher-table-scroll{overflow-x:auto;}
+.discount-table-scroll.voucher-table-scroll table{min-width:1260px;}
+.discount-row-actions.voucher-row-actions{white-space:nowrap;gap:5px;}
+.discount-row-actions.voucher-row-actions .action-icon{height:32px;width:32px;padding:0;border:1px solid #dce6f2;background:white;color:#235ea5;}
+.discount-row-actions.voucher-row-actions .discount-danger{color:#b23838!important;}
+.discount-dialog.voucher-dialog{width:min(950px,100%);max-height:92dvh;}
+.discount-section.voucher-section{border-top:1px solid #e0e9f4;padding:18px 0 8px;margin:0;display:block;}
+.discount-section.voucher-section h3{font-size:15px;margin:0 0 16px;color:#173e71;}
+.discount-section.voucher-section>.field{margin-top:12px;}
+.discount-section.voucher-section .discount-target-picker{margin:16px 0;}
+.discount-target-list.voucher-target-list{background:#fff;margin-top:14px;max-height:180px;}
+.discount-target-list.voucher-target-list label{align-items:center;}
+.discount-dialog .dialog-head .muted{margin:7px 0 0;font-size:12px;}
+.discount-details.voucher-view-grid{gap:0 22px;margin-top:20px;}
+.discount-details.voucher-view-grid>div{display:flex;flex-direction:column;gap:6px;border-bottom:1px solid #ecf1f8;padding:12px 0;}
+.discount-details.voucher-view-grid span{color:#667c99;}
+.discount-details.voucher-view-grid strong{color:#173e71;}
+@media(max-width:650px){.discount-target-list.voucher-target-list,.discount-details.voucher-view-grid{grid-template-columns:1fr;}}

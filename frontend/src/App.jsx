@@ -140,12 +140,20 @@ export function App(){
  const [profile,setProfile]=useState(null),[loading,setLoading]=useState(true),[sidebar,setSidebar]=useState(false),[notice,setNotice]=useState({error:'',message:''}),[page,setPage]=useState('dashboard'),[openNavGroups,setOpenNavGroups]=useState({"Master Data":true,"Transactions":true,"Settings":true}),[selfEmailEdit,setSelfEmailEdit]=useState(false),[selfEmailBusy,setSelfEmailBusy]=useState(false);
  const notify=useCallback((message,error=false)=>setNotice(error?{error:message,message:''}:{error:'',message}),[]);
  useEffect(()=>{request('/auth/me').then(p=>{setProfile(p);setPage(landingPage(p));}).catch(()=>{}).finally(()=>setLoading(false));},[]);
- // Keep the menu open until the hamburger is clicked again, outside is clicked, or Escape is pressed.
+ // Close the docked navigation on an outside pointer press (including the POS content),
+ // but keep the hamburger clickable and leave the navigation itself interactive.
  useEffect(()=>{
   if(!sidebar)return;
   const onEscape=e=>{if(e.key==='Escape')setSidebar(false);};
+  const onOutside=e=>{
+   if(e.button!==0)return;
+   const target=e.target;
+   if(target?.closest?.('#workspace-navigation, [data-sidebar-toggle]'))return;
+   setSidebar(false);
+  };
+  document.addEventListener('pointerdown',onOutside);
   window.addEventListener('keydown',onEscape);
-  return ()=>window.removeEventListener('keydown',onEscape);
+  return ()=>{document.removeEventListener('pointerdown',onOutside);window.removeEventListener('keydown',onEscape);};
  },[sidebar]);
  async function signOut(){try{await request('/auth/logout',{method:'POST',body:{}});}catch{}setProfile(null);setSidebar(false);}
  if(loading)return <div className="loading">Loading TPOS...</div>;
@@ -171,7 +179,7 @@ export function App(){
    {id:'categories',label:'Categories',icon:Tags,show:canViewCategories},
    {id:'products',label:'Products',icon:Package,show:canViewProducts},
    {id:'suppliers',label:'Suppliers',icon:Truck,show:canViewSuppliers},
-   {id:'vouchers',label:'Customer Vouchers',icon:Ticket,show:canViewVouchers},
+   {id:'vouchers',label:'Vouchers',icon:Ticket,show:canViewVouchers},
    {id:'discounts',label:'Discounts',icon:BadgePercent,show:canViewDiscounts},
    {id:'cash-shifts',label:'Cash Shifts',icon:Wallet,show:canViewCashShifts}
   ]},
@@ -192,7 +200,7 @@ export function App(){
   if(window.matchMedia('(max-width: 900px)').matches)setSidebar(false);
  };
  const navItem=(entry)=>{const ItemIcon=entry.icon;return <button key={entry.id} type="button" className={page===entry.id?'nav active':'nav'} aria-current={page===entry.id?'page':undefined} onClick={()=>navigate(entry.id)}><ItemIcon size={18}/><span>{entry.label}</span></button>;};
- return <div className="workspace">
+ return <div className={sidebar?"workspace sidebar-expanded":"workspace"}>
  {sidebar&&<button type="button" className="sidebar-scrim" aria-label="Close navigation" onClick={()=>setSidebar(false)} tabIndex={-1}/>}
  <aside id="workspace-navigation" aria-label="Workspace navigation" className={sidebar?'sidebar open':'sidebar'} aria-hidden={!sidebar} inert={!sidebar}>
   <div className="sidebar-inner">
@@ -206,7 +214,7 @@ export function App(){
    </section>)}
   </div>
  </aside>
- <div className="main-column"><header className="topbar"><div className="top-left"><button type="button" className="icon-button" aria-label={sidebar?"Close navigation":"Open navigation"} title={sidebar?"Close navigation":"Open navigation"} aria-controls="workspace-navigation" aria-expanded={sidebar} onClick={()=>setSidebar(current=>!current)}><Menu size={21}/></button><div className="workspace-name"><Building2 size={18}/><div><b>{profile.business.name}</b><small>{profile.user.role} / {profile.business.type||'Business'}</small></div></div></div><div className="top-right"><span>{profile.user.fullName}</span><button className="outline action-icon" title="Sign Out" aria-label="Sign Out" onClick={signOut}><LogOut size={19}/></button></div></header>
+ <div className="main-column"><header className="topbar"><div className="top-left"><button type="button" className="icon-button" aria-label={sidebar?"Close navigation":"Open navigation"} title={sidebar?"Close navigation":"Open navigation"} data-sidebar-toggle aria-controls="workspace-navigation" aria-expanded={sidebar} onClick={()=>setSidebar(current=>!current)}><Menu size={21}/></button><div className="workspace-name"><Building2 size={18}/><div><b>{profile.business.name}</b><small>{profile.user.role} / {profile.business.type||'Business'}</small></div></div></div><div className="top-right"><span>{profile.user.fullName}</span><button className="outline action-icon" title="Sign Out" aria-label="Sign Out" onClick={signOut}><LogOut size={19}/></button></div></header>
   <Notice error={notice.error} message={notice.message} onClose={()=>setNotice({error:'',message:''})}/>
   {profile.user.mustChangePassword?<PasswordView onDone={()=>setProfile(null)} notify={notify}/>:page==='dashboard'&&canViewDashboard?<Dashboard profile={profile} notify={notify} onNavigate={navigate}/>:page==='categories'&&canViewCategories?<Categories profile={profile} notify={notify}/>:page==='suppliers'&&canViewSuppliers?<Suppliers profile={profile} notify={notify}/>:page==='products'&&canViewProducts?<Products profile={profile} notify={notify}/>:page==='discounts'&&canViewDiscounts?<Discounts profile={profile} notify={notify}/>:page==='vouchers'&&canViewVouchers?<Vouchers profile={profile} notify={notify}/>:page==='cash-shifts'&&canViewCashShifts?<CashShifts profile={profile} notify={notify}/>:page==='cash-drawer'&&canViewCashDrawer?<CashDrawer profile={profile} notify={notify}/>:page==='payment-methods'&&canViewPayments?<PaymentMethods profile={profile} notify={notify}/>:page==='sst-settings'&&canViewSst?<SstSettings profile={profile} notify={notify}/>:page==='service-charge'&&canViewServiceCharge?<ServiceChargeSettings profile={profile} notify={notify}/>:page==='pos'&&canViewPos?<PosTerminal profile={profile} notify={notify}/>:hasView?<UsersView profile={profile} notify={notify} onAccountEmailChanged={()=>{setProfile(null);setSidebar(false);notify('Email changed. Sign in again using the new email.');}}/>:<main className="page"><h1>My Account</h1><p>Your account is active. User management requires explicit permission.</p><p>Login Email: {profile.user.email}</p><button className="outline" onClick={()=>setSelfEmailEdit(true)}>Change Email</button>{selfEmailEdit&&<EmailEditor original={{id:profile.user.id,email:profile.user.email,full_name:profile.user.fullName}} self={true} busy={selfEmailBusy} onCancel={()=>setSelfEmailEdit(false)} onSave={async data=>{setSelfEmailBusy(true);try{const result=await request(`/users/${profile.user.id}/email`,{method:'PATCH',body:data});setSelfEmailEdit(false);if(result.mustSignInAgain){setProfile(null);notify('Email changed. Sign in again using the new email.');}else notify('Email unchanged.');}catch(e){notify(e.message,true);}finally{setSelfEmailBusy(false);}}}/>}</main>}
  <footer className="app-footer">© 2026 TPOS V2 — MNII Alpha Ent</footer>

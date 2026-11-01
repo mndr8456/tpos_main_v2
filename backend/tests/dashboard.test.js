@@ -33,7 +33,8 @@ test('Dashboard uses tenant pool and does not invent Sales/Product/Inventory dat
 test('Dashboard opens first only for granted users, while keeping other navigation',async()=>{
  const app=await read('frontend/src/App.jsx'),dash=await read('frontend/src/Dashboard.jsx');
  assert.match(app,/const landingPage=profile=>profile\?\.user\?\.permissions\?\.includes\('dashboard.view'\)/);
- assert.match(app,/canViewDashboard&&<button/);
+ assert.match(app,/const canViewDashboard=profile\.user\.permissions\.includes\('dashboard\.view'\)/);
+ assert.ok((app.match(/\bcanViewDashboard\b/g)||[]).length>=3,'Dashboard permission must guard navigation and the rendered page');
  assert.match(app,/page==='dashboard'&&canViewDashboard\?<Dashboard/);
  assert.match(dash,/request\('\/dashboard\/overview'\)/);
  assert.match(dash,/Data not available yet/);
