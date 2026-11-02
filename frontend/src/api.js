@@ -1,6 +1,4 @@
-const base = import.meta.env.DEV 
-  ? 'http://127.0.0.1:5100' 
-  : (import.meta.env.VITE_BACKEND_URL || 'https://tpos-main-v2.onrender.com');
+const base = import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? 'http://127.0.0.1:5100' : 'https://tpos-main-v2.onrender.com');
 
 export async function request(path, options = {}) {
   const response = await fetch(`${base}/api/v2${path}`, {
