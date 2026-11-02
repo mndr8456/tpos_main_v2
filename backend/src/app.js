@@ -47,14 +47,24 @@ export function createApp(){
  app.use('/api/v2/products/:id/image',express.json({limit:'3mb'}));
  app.use('/api/v2/payment-methods/:branchId/:code/image',express.json({limit:'2mb'}));
  app.use(express.json({limit:'320kb'}));
+
+ // Senarai domain asal (origin) yang dibenarkan untuk permintaan POST/PUT/DELETE
+ const allowedOrigins = [
+   'https://tpos-main-v2.vercel.app',
+   'http://127.0.0.1:5174',
+   'http://localhost:5174'
+ ];
+
  app.use((req,res,next)=>{
   if(!['GET','HEAD','OPTIONS'].includes(req.method)){
    const origin=req.headers.origin;
-   if(origin && origin!==settings.origin) return res.status(403).json({error:'INVALID_ORIGIN'});
+   const isAllowed = !origin || allowedOrigins.includes(origin) || /\.vercel\.app$/.test(origin);
+   if(origin && !isAllowed) return res.status(403).json({error:'INVALID_ORIGIN'});
    if(req.headers['content-type']?.split(';')[0]?.trim()!=='application/json')return res.status(415).json({error:'JSON_REQUIRED'});
   }
   next();
  });
+
  app.get('/api/v2/health',(_req,res)=>res.json({status:'OK',build:'TPOS_V2_CLEAN_R1'}));
  app.post('/api/v2/tenants/register',createRegistrationRateLimit(),registerTenant);
  app.post('/api/v2/auth/login',login);
