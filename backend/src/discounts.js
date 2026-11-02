@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { parseDiscountCsv } from './discounts-csv.js';
 import { evaluateDiscount } from './discount-evaluation.js';
+import {generateDiscountCode} from './discount-code.js';
 
 const failure=(code,status=400)=>Object.assign(new Error(code),{status});
 const positive=z.coerce.number().int().positive();
@@ -45,10 +46,50 @@ function dbError(res,e){if(e.code==='ER_DUP_ENTRY')return res.status(409).json({
 export async function listDiscounts(req,res){const [rows]=await req.auth.pool.execute(`${listSelect} ORDER BY d.sort_order ASC,d.id ASC LIMIT 5000`);return res.json({discounts:await enrich(req.auth.pool,rows)});}
 export const exportDiscounts=listDiscounts;
 export async function discountMeta(req,res){const [categories,products]=await Promise.all([req.auth.pool.execute("SELECT id,category_name FROM categories WHERE status='ACTIVE' AND is_deleted=0 ORDER BY category_name"),req.auth.pool.execute("SELECT id,sku,product_name FROM products WHERE status='ACTIVE' AND is_deleted=0 ORDER BY product_name LIMIT 5000")]);return res.json({categories:categories[0].map(r=>({...r,id:String(r.id)})),products:products[0].map(r=>({...r,id:String(r.id)}))});}
-export async function createDiscount(req,res){const data=discountSchema.parse(req.body);try{const result=await transaction(req.auth.pool,conn=>insertDiscount(conn,data,req.auth.user.id));return res.status(201).json({message:'DISCOUNT_CREATED',...result});}catch(e){return dbError(res,e);}}
-export async function updateDiscount(req,res){const id=positive.parse(req.params.id),data=discountSchema.parse(req.body);try{await transaction(req.auth.pool,async conn=>{const before=await getRow(conn,id,true);if(!before)throw failure('DISCOUNT_NOT_FOUND',404);if(data.usageLimit!=null&&Number(before.usage_count)>data.usageLimit)throw failure('USAGE_LIMIT_BELOW_REDEMPTIONS');if(Number(before.usage_count)>0&&(data.discountCode!==before.discount_code||data.discountType!==before.discount_type||data.discountScope!==before.discount_scope))throw failure('DISCOUNT_ALREADY_USED_LOCKED');await validateTargets(conn,data);const previousTargets=await targetRows(conn,id);await conn.execute(`UPDATE discounts SET ${fields.map(f=>`${f}=?`).join(',')},updated_by=? WHERE id=? AND is_deleted=0`,[...values(data),req.auth.user.id,id]);await writeTargets(conn,id,data);await audit(conn,id,req.auth.user.id,'DISCOUNT_UPDATE',snapshot(obj(before),previousTargets),data);});return res.json({message:'DISCOUNT_UPDATED'});}catch(e){return dbError(res,e);}}
+// Discount codes are non-bearer rule identifiers. Batch creation is atomic per tenant.
+export async function createDiscount(req,res){
+ const body=z.object({discountCode:z.string().trim().optional(),generateQuantity:z.coerce.number().int().min(1).max(200).default(1)}).passthrough().parse(req.body);
+ if(body.discountCode)throw failure('DISCOUNT_CODE_AUTO_GENERATED');
+ const {discountCode:ignored,generateQuantity,...fieldsOnly}=body;
+ const template=discountSchema.parse({...fieldsOnly,discountCode:'DSC-VALIDATIONONLY'});
+ try{
+  const created=await transaction(req.auth.pool,async conn=>{
+   // Validate all targets before first insert; rollback protects the entire batch.
+   await validateTargets(conn,template);
+   const result=[];
+   for(let index=0;index<generateQuantity;index++){
+    let createdRow;
+    for(let attempt=0;attempt<5;attempt++){
+     const data={...template,discountCode:generateDiscountCode()};
+     try{createdRow=await insertDiscount(conn,data,req.auth.user.id);result.push({...createdRow,discountCode:data.discountCode});break;}
+     catch(e){if(e.code==='ER_DUP_ENTRY'&&attempt<4)continue;throw e;}
+    }
+   }
+   return result;
+  });
+  return res.status(201).json({message:created.length===1?'DISCOUNT_CREATED':'DISCOUNTS_CREATED',id:created[0].id,discountCode:created[0].discountCode,count:created.length,discountCodes:created.map(r=>r.discountCode)});
+ }catch(e){return dbError(res,e);}
+}
+
+export async function updateDiscount(req,res){const id=positive.parse(req.params.id),data=discountSchema.parse(req.body);try{await transaction(req.auth.pool,async conn=>{const before=await getRow(conn,id,true);if(!before)throw failure('DISCOUNT_NOT_FOUND',404);if(data.discountCode!==before.discount_code)throw failure('DISCOUNT_CODE_IMMUTABLE',409);if(data.usageLimit!=null&&Number(before.usage_count)>data.usageLimit)throw failure('USAGE_LIMIT_BELOW_REDEMPTIONS');if(Number(before.usage_count)>0&&(data.discountCode!==before.discount_code||data.discountType!==before.discount_type||data.discountScope!==before.discount_scope))throw failure('DISCOUNT_ALREADY_USED_LOCKED');await validateTargets(conn,data);const previousTargets=await targetRows(conn,id);await conn.execute(`UPDATE discounts SET ${fields.map(f=>`${f}=?`).join(',')},updated_by=? WHERE id=? AND is_deleted=0`,[...values(data),req.auth.user.id,id]);await writeTargets(conn,id,data);await audit(conn,id,req.auth.user.id,'DISCOUNT_UPDATE',snapshot(obj(before),previousTargets),data);});return res.json({message:'DISCOUNT_UPDATED'});}catch(e){return dbError(res,e);}}
 export async function discountStatus(req,res){const id=positive.parse(req.params.id),{status}=z.object({status:z.enum(['ACTIVE','INACTIVE'])}).strict().parse(req.body);await transaction(req.auth.pool,async conn=>{const before=await getRow(conn,id,true);if(!before)throw failure('DISCOUNT_NOT_FOUND',404);if(before.status===status)return;await conn.execute('UPDATE discounts SET status=?,updated_by=? WHERE id=?',[status,req.auth.user.id,id]);await audit(conn,id,req.auth.user.id,status==='ACTIVE'?'DISCOUNT_ACTIVATE':'DISCOUNT_DEACTIVATE',{status:before.status},{status});});return res.json({message:'DISCOUNT_STATUS_UPDATED'});}
 export async function archiveDiscount(req,res){const id=positive.parse(req.params.id);await transaction(req.auth.pool,async conn=>{const before=await getRow(conn,id,true);if(!before)throw failure('DISCOUNT_NOT_FOUND',404);await conn.execute("UPDATE discounts SET status='INACTIVE',is_deleted=1,updated_by=? WHERE id=?",[req.auth.user.id,id]);await audit(conn,id,req.auth.user.id,'DISCOUNT_ARCHIVE',{status:before.status},{archived:true});});return res.json({message:'DISCOUNT_ARCHIVED'});}
+const printSize=z.object({widthCm:z.coerce.number().min(5).max(30),heightCm:z.coerce.number().min(3).max(20)}).strict().refine(v=>[v.widthCm,v.heightCm].every(n=>Math.abs(n*100-Math.round(n*100))<1e-7),'TWO_DECIMALS_ONLY');
+export async function discountPrintSettings(req,res){
+ const [[row]]=await req.auth.pool.execute('SELECT width_cm,height_cm FROM discount_print_settings WHERE id=1');
+ if(!row)throw failure('DISCOUNT_PRINT_SETTINGS_NOT_INSTALLED',503);
+ return res.json({widthCm:String(row.width_cm),heightCm:String(row.height_cm)});
+}
+export async function saveDiscountPrintSettings(req,res){
+ const {widthCm,heightCm}=printSize.parse(req.body);
+ await transaction(req.auth.pool,async conn=>{
+  const [[before]]=await conn.execute('SELECT width_cm,height_cm FROM discount_print_settings WHERE id=1 FOR UPDATE');
+  if(!before)throw failure('DISCOUNT_PRINT_SETTINGS_NOT_INSTALLED',503);
+  await conn.execute('UPDATE discount_print_settings SET width_cm=?,height_cm=?,updated_by=?,updated_at=CURRENT_TIMESTAMP(6) WHERE id=1',[widthCm,heightCm,req.auth.user.id]);
+  await conn.execute('INSERT INTO discount_print_settings_audit(actor_user_id,previous_data,next_data) VALUES(?,?,?)',[req.auth.user.id,JSON.stringify(before),JSON.stringify({widthCm,heightCm})]);
+ });
+ return res.json({message:'DISCOUNT_PRINT_SETTINGS_UPDATED'});
+}
 export async function discountAudit(req,res){const [rows]=await req.auth.pool.execute(`SELECT a.id,a.discount_id,d.discount_code,d.discount_name,a.action_type,a.previous_data,a.next_data,a.created_at,COALESCE(u.full_name,u.username) AS user_name FROM discount_audit_logs a JOIN discounts d ON d.id=a.discount_id JOIN users u ON u.id=a.actor_user_id ORDER BY a.id DESC LIMIT 300`);return res.json({logs:rows.map(r=>({...r,id:String(r.id),discount_id:String(r.discount_id)}))});}
 async function resolveCodes(conn,data){
  if(data.eligibilityType==='ALL'){if(data.targetCodes.length)throw failure('ALL_MUST_HAVE_NO_TARGETS');const {targetCodes,...rest}=data;return {...rest,targetIds:[]};}
@@ -60,10 +101,50 @@ async function resolveCodes(conn,data){
  if(ids.some(x=>!x)||new Set(ids).size!==ids.length)throw failure('CSV_TARGET_NOT_FOUND_OR_DUPLICATE');
  const {targetCodes,...rest}=data;return {...rest,targetIds:ids};
 }
-async function csvValidations(pool,csv){const rows=parseDiscountCsv(csv);const conn=await pool.getConnection();try{const checked=[];for(const row of rows){if(row.error){checked.push(row);continue;}try{const data=await resolveCodes(conn,row.data);checked.push({line:row.line,data:discountSchema.parse(data)});}catch(e){checked.push({line:row.line,error:e.issues?e.issues.map(i=>i.message).join('; '):e.message});}}return checked;}finally{conn.release();}}
+async function csvValidations(pool,csv){const rows=parseDiscountCsv(csv);const conn=await pool.getConnection();try{const checked=[];for(const row of rows){if(row.error){checked.push(row);continue;}try{
+    const data=await resolveCodes(conn,row.data);
+    // Validate all rule fields with a temporary identifier, but never import it.
+    // Blank CSV code is intentional and will be generated only on Confirm.
+    const parsed=discountSchema.parse({...data,discountCode:data.discountCode||'DSC-PREVIEWONLY'});
+    checked.push({line:row.line,data:{...parsed,discountCode:data.discountCode||''}});
+   }catch(e){checked.push({line:row.line,error:e.issues?e.issues.map(i=>i.message).join('; '):e.message});}}return checked;}finally{conn.release();}}
 const csvRequest=z.object({csv:z.string().max(1024*1024)}).strict();
-export async function previewDiscountImport(req,res){const {csv}=csvRequest.parse(req.body);const rows=await csvValidations(req.auth.pool,csv);const [existing]=await req.auth.pool.execute('SELECT discount_code FROM discounts');const registered=new Set(existing.map(x=>x.discount_code));const output=rows.map(row=>row.error?row:registered.has(row.data.discountCode)?{line:row.line,error:'DISCOUNT_CODE_DUPLICATE'}:{line:row.line,data:row.data});return res.json({count:output.length,valid:output.every(r=>!r.error),rows:output.map(r=>({line:r.line,error:r.error||'',code:r.data?.discountCode,name:r.data?.discountName}))});}
-export async function importDiscounts(req,res){const {csv}=csvRequest.parse(req.body);const rows=await csvValidations(req.auth.pool,csv);if(rows.some(r=>r.error))throw failure('CSV_VALIDATION_FAILED');try{await transaction(req.auth.pool,async conn=>{for(const row of rows)await insertDiscount(conn,row.data,req.auth.user.id,'DISCOUNT_IMPORT');});return res.status(201).json({message:'DISCOUNTS_IMPORTED',count:rows.length});}catch(e){return dbError(res,e);}}
+export async function previewDiscountImport(req,res){
+ const {csv}=csvRequest.parse(req.body),rows=await csvValidations(req.auth.pool,csv);
+ const [existing]=await req.auth.pool.execute('SELECT discount_code FROM discounts');
+ const registered=new Set(existing.map(x=>String(x.discount_code).toUpperCase()));
+ const output=rows.map(row=>row.error?row:row.data.discountCode&&registered.has(row.data.discountCode)?{line:row.line,code:row.data.discountCode,name:row.data.discountName,error:'DISCOUNT_CODE_DUPLICATE'}:row);
+ return res.json({count:output.length,valid:output.every(r=>!r.error),rows:output.map(r=>({line:r.line,error:r.error||'',code:r.code||r.data?.discountCode||'AUTO-GENERATED',name:r.name||r.data?.discountName||''}))});
+}
+export async function importDiscounts(req,res){
+ const {csv}=csvRequest.parse(req.body),rows=await csvValidations(req.auth.pool,csv);
+ if(rows.some(r=>r.error))throw failure('CSV_VALIDATION_FAILED');
+ try{
+  const imported=await transaction(req.auth.pool,async conn=>{
+   const codes=[];let generatedCount=0;
+   // No database changes are committed until every row, targets and audit succeeds.
+   for(const row of rows){
+    let data=row.data;
+    if(!data.discountCode){
+     let inserted=false;
+     for(let attempt=0;attempt<5;attempt++){
+      data={...row.data,discountCode:generateDiscountCode()};
+      try{await insertDiscount(conn,data,req.auth.user.id,'DISCOUNT_IMPORT');inserted=true;break;}
+      catch(e){if(e.code==='ER_DUP_ENTRY'&&attempt<4)continue;throw e;}
+     }
+     if(!inserted)throw failure('DISCOUNT_CODE_GENERATION_FAILED',409);
+     generatedCount++;
+    }else{
+     // Preserve an explicitly supplied legacy rule code, as Voucher Import does.
+     await insertDiscount(conn,data,req.auth.user.id,'DISCOUNT_IMPORT');
+    }
+    codes.push(data.discountCode);
+   }
+   return {count:codes.length,generatedCount};
+  });
+  return res.status(201).json({...imported,message:'DISCOUNTS_IMPORTED'});
+ }catch(e){return dbError(res,e);}
+}
 // Read-only calculator for Discount Master. Optional usage count is a WHAT-IF scenario,
 // never a redemption. The actual database usage_count is not written or overridden.
 export async function previewDiscountCalculation(req,res){

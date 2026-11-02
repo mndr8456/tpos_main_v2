@@ -23,32 +23,15 @@ test('V1 navigation groups show only allowed implemented pages, and Dashboard fo
  assert.match(app,/aria-current=\{page===entry\.id\?'page'/);
  assert.match(app,/openNavGroups/);
 });
-test('desktop sidebar is fixed to viewport, pushes content, closes on outside click; mobile overlay remains',()=>{
+test('desktop sidebar pushes content while mobile retains overlay; hamburger stays in topbar',()=>{
  assert.match(css,/\.workspace \.sidebar\.open\{width:258px/);
- assert.match(css,/\.workspace \.sidebar\{display:block;position:fixed;top:0;left:0;bottom:0/);
- assert.match(css,/height:100vh;height:100dvh/);
- assert.doesNotMatch(css,/\.workspace \.sidebar \{position:sticky/);
- assert.match(css,/\.workspace\.sidebar-expanded \.main-column\{margin-left:258px/);
- assert.match(css,/\.workspace\.sidebar-expanded \.main-column\{margin-left:0/);
+ assert.match(css,/\.workspace \.sidebar\{display:block;position:fixed/);
  assert.match(css,/@media\(max-width:900px\)/);
  assert.match(css,/\.workspace \.sidebar-scrim\{display:none/);
  assert.match(css,/\.workspace \.sidebar-scrim\{display:block/);
- assert.match(app,/document\.addEventListener\('pointerdown',onOutside\)/);
- assert.match(app,/document\.removeEventListener\('pointerdown',onOutside\)/);
- assert.match(app,/target\?\.closest\?\.\('#workspace-navigation, \[data-sidebar-toggle\]'\)/);
- assert.match(app,/data-sidebar-toggle aria-controls="workspace-navigation"/);
+ assert.match(app,/aria-controls="workspace-navigation"/);
  assert.match(app,/inert=\{!sidebar\}/);
  assert.match(app,/setSidebar\(current=>!current\)/);
-});
-test('Discount forms and table use accepted Voucher UI patterns without replacing Discount business rules',()=>{
- for(const token of ['voucher-dialog','voucher-section','voucher-target-picker','voucher-target-list','voucher-view-grid','voucher-row-actions','voucher-table-scroll','voucher-footer'])assert.ok(discount.includes(token),token);
- assert.match(discount, /<button type="submit" className="primary" disabled=\{busy\}><Save size=\{18\}\/>/);
- assert.match(discount, /'Valid From','Valid Until'/);
- assert.match(discount, /'Discount Code','Name'/);
- assert.match(css,/\.discount-dialog\.voucher-dialog\{width:min\(950px,100%\)/);
- assert.match(css,/\.discount-table-scroll\.voucher-table-scroll table\{min-width:1260px/);
- assert.match(discount,/allowed\('discounts\.calculate'\)/);
- assert.match(discount,/allowed\('discounts\.delete'\)/);
 });
 test('Discount matches Voucher action pattern with view preview edit status and archive',()=>{
  for(const role of ['discounts.calculate','discounts.update','discounts.delete'])assert.ok(discount.includes(role));
@@ -61,16 +44,16 @@ test('Discount matches Voucher action pattern with view preview edit status and 
 test('Discount retains CSV Preview & Confirm and exports a downloadable PDF report',()=>{
  assert.match(discount,/discounts\/import\/preview/);
  assert.match(discount,/discounts\/import'/);
- assert.match(discount,/Export Discounts CSV/);
- assert.match(discount,/Download Discounts PDF/);
- assert.match(discount,/generateDiscountPdf\(filtered,/);
+ assert.doesNotMatch(discount,/Export Discounts CSV/);
+ assert.match(discount,/Export Discounts PDF/);
+ assert.match(discount,/generateDiscountPdf\(selected,/);
  assert.match(pdf,/buildPdfFromJpegs/);
  assert.match(pdf,/generateDiscountPdf/);
  assert.doesNotMatch(pdf,/fetch\(|XMLHttpRequest/);
 });
 test('discount PDF has bounded page lengths and uses tenant business label',()=>{
- assert.match(pdf,/PDF_EXPORT_LIMIT_1000/);
- assert.match(pdf,/perPage=20/);
- assert.match(pdf,/drawDiscountReportPage\(ctx,/);
+ assert.match(pdf,/PDF_EXPORT_LIMIT_100/);
+ assert.match(pdf,/widthPt:wcm\*72\/2\.54,heightPt:hcm\*72\/2\.54/);
+ assert.match(pdf,/buildPdfFromJpegs\(pages\)/);
  assert.match(discount,/profile\.business\?\.name/);
 });

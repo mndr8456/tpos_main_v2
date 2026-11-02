@@ -1,5 +1,6 @@
 import {refreshPage} from './refresh-page.js';
 import CashDrawer from './CashDrawer.jsx';
+import RestaurantTables from './RestaurantTables.jsx';
 import PaymentMethods from './PaymentMethods.jsx';
 import SstSettings from './SstSettings.jsx';
 import ServiceChargeSettings from './ServiceChargeSettings.jsx';
@@ -16,7 +17,7 @@ import Products from './Products.jsx';
 import Discounts from './Discounts.jsx';
 import Vouchers from './Vouchers.jsx';
 import CashShifts from './CashShifts.jsx';
-import { BadgePercent,Ticket,Wallet,Archive, CreditCard,ShoppingCart,ReceiptText,ChevronDown } from 'lucide-react';
+import { BadgePercent,Ticket,Wallet,Archive, CreditCard,ShoppingCart,ReceiptText,ChevronDown,Table2 } from 'lucide-react';
 
 const types=['RESTAURANT','GROCERY','RETAIL','MINI_MARKET','CAFE','FOOD_TRUCK','STREET_FOOD'];
 const regFields=[['businessName','Registered Business Name'],['ssmRegistrationNumber','SSM Registration Number'],['ssmOldRegistrationNumber','Old SSM (optional)'],['tin','TIN (optional)'],['sstSalesTaxNumber','SST Number Sales Tax (optional)'],['sstServiceTaxNumber','SST Number Service Tax (optional)'],['phone','Business Phone (optional)'],['addressLine1','Address Line 1'],['addressLine2','Address Line 2 (optional)'],['city','City'],['postcode','Postcode'],['state','State'],['ownerName','Owner Full Name'],['ownerEmail','Owner Email'],['ownerPassword','Owner Password']];
@@ -171,6 +172,7 @@ export function App(){
  const canViewSst=profile.user.permissions.includes('sst_settings.view');
  const canViewServiceCharge=profile.user.permissions.includes('service_charge.view');
  const canViewPos=profile.user.permissions.includes('pos.view');
+ const canViewRestaurantTables=profile.user.permissions.includes('restaurant_tables.view')&&['RESTAURANT','CAFE'].includes(String(profile.business.type).toUpperCase());
  // Follow the V1 order for implemented modules. Unbuilt V1 modules have no broken links.
  // Visibility is derived from the authenticated tenant's permission grants, not a static role.
  const navigationGroups=[
@@ -179,6 +181,7 @@ export function App(){
    {id:'categories',label:'Categories',icon:Tags,show:canViewCategories},
    {id:'products',label:'Products',icon:Package,show:canViewProducts},
    {id:'suppliers',label:'Suppliers',icon:Truck,show:canViewSuppliers},
+   {id:'restaurant-tables',label:'Restaurant Tables',icon:Table2,show:canViewRestaurantTables},
    {id:'vouchers',label:'Vouchers',icon:Ticket,show:canViewVouchers},
    {id:'discounts',label:'Discounts',icon:BadgePercent,show:canViewDiscounts},
    {id:'cash-shifts',label:'Cash Shifts',icon:Wallet,show:canViewCashShifts}
@@ -216,7 +219,7 @@ export function App(){
  </aside>
  <div className="main-column"><header className="topbar"><div className="top-left"><button type="button" className="icon-button" aria-label={sidebar?"Close navigation":"Open navigation"} title={sidebar?"Close navigation":"Open navigation"} data-sidebar-toggle aria-controls="workspace-navigation" aria-expanded={sidebar} onClick={()=>setSidebar(current=>!current)}><Menu size={21}/></button><div className="workspace-name"><Building2 size={18}/><div><b>{profile.business.name}</b><small>{profile.user.role} / {profile.business.type||'Business'}</small></div></div></div><div className="top-right"><span>{profile.user.fullName}</span><button className="outline action-icon" title="Sign Out" aria-label="Sign Out" onClick={signOut}><LogOut size={19}/></button></div></header>
   <Notice error={notice.error} message={notice.message} onClose={()=>setNotice({error:'',message:''})}/>
-  {profile.user.mustChangePassword?<PasswordView onDone={()=>setProfile(null)} notify={notify}/>:page==='dashboard'&&canViewDashboard?<Dashboard profile={profile} notify={notify} onNavigate={navigate}/>:page==='categories'&&canViewCategories?<Categories profile={profile} notify={notify}/>:page==='suppliers'&&canViewSuppliers?<Suppliers profile={profile} notify={notify}/>:page==='products'&&canViewProducts?<Products profile={profile} notify={notify}/>:page==='discounts'&&canViewDiscounts?<Discounts profile={profile} notify={notify}/>:page==='vouchers'&&canViewVouchers?<Vouchers profile={profile} notify={notify}/>:page==='cash-shifts'&&canViewCashShifts?<CashShifts profile={profile} notify={notify}/>:page==='cash-drawer'&&canViewCashDrawer?<CashDrawer profile={profile} notify={notify}/>:page==='payment-methods'&&canViewPayments?<PaymentMethods profile={profile} notify={notify}/>:page==='sst-settings'&&canViewSst?<SstSettings profile={profile} notify={notify}/>:page==='service-charge'&&canViewServiceCharge?<ServiceChargeSettings profile={profile} notify={notify}/>:page==='pos'&&canViewPos?<PosTerminal profile={profile} notify={notify}/>:hasView?<UsersView profile={profile} notify={notify} onAccountEmailChanged={()=>{setProfile(null);setSidebar(false);notify('Email changed. Sign in again using the new email.');}}/>:<main className="page"><h1>My Account</h1><p>Your account is active. User management requires explicit permission.</p><p>Login Email: {profile.user.email}</p><button className="outline" onClick={()=>setSelfEmailEdit(true)}>Change Email</button>{selfEmailEdit&&<EmailEditor original={{id:profile.user.id,email:profile.user.email,full_name:profile.user.fullName}} self={true} busy={selfEmailBusy} onCancel={()=>setSelfEmailEdit(false)} onSave={async data=>{setSelfEmailBusy(true);try{const result=await request(`/users/${profile.user.id}/email`,{method:'PATCH',body:data});setSelfEmailEdit(false);if(result.mustSignInAgain){setProfile(null);notify('Email changed. Sign in again using the new email.');}else notify('Email unchanged.');}catch(e){notify(e.message,true);}finally{setSelfEmailBusy(false);}}}/>}</main>}
+  {profile.user.mustChangePassword?<PasswordView onDone={()=>setProfile(null)} notify={notify}/>:page==='dashboard'&&canViewDashboard?<Dashboard profile={profile} notify={notify} onNavigate={navigate}/>:page==='categories'&&canViewCategories?<Categories profile={profile} notify={notify}/>:page==='suppliers'&&canViewSuppliers?<Suppliers profile={profile} notify={notify}/>:page==='products'&&canViewProducts?<Products profile={profile} notify={notify}/>:page==='discounts'&&canViewDiscounts?<Discounts profile={profile} notify={notify}/>:page==='vouchers'&&canViewVouchers?<Vouchers profile={profile} notify={notify}/>:page==='cash-shifts'&&canViewCashShifts?<CashShifts profile={profile} notify={notify}/>:page==='cash-drawer'&&canViewCashDrawer?<CashDrawer profile={profile} notify={notify}/>:page==='restaurant-tables'&&canViewRestaurantTables?<RestaurantTables profile={profile} notify={notify}/>:page==='payment-methods'&&canViewPayments?<PaymentMethods profile={profile} notify={notify}/>:page==='sst-settings'&&canViewSst?<SstSettings profile={profile} notify={notify}/>:page==='service-charge'&&canViewServiceCharge?<ServiceChargeSettings profile={profile} notify={notify}/>:page==='pos'&&canViewPos?<PosTerminal profile={profile} notify={notify}/>:hasView?<UsersView profile={profile} notify={notify} onAccountEmailChanged={()=>{setProfile(null);setSidebar(false);notify('Email changed. Sign in again using the new email.');}}/>:<main className="page"><h1>My Account</h1><p>Your account is active. User management requires explicit permission.</p><p>Login Email: {profile.user.email}</p><button className="outline" onClick={()=>setSelfEmailEdit(true)}>Change Email</button>{selfEmailEdit&&<EmailEditor original={{id:profile.user.id,email:profile.user.email,full_name:profile.user.fullName}} self={true} busy={selfEmailBusy} onCancel={()=>setSelfEmailEdit(false)} onSave={async data=>{setSelfEmailBusy(true);try{const result=await request(`/users/${profile.user.id}/email`,{method:'PATCH',body:data});setSelfEmailEdit(false);if(result.mustSignInAgain){setProfile(null);notify('Email changed. Sign in again using the new email.');}else notify('Email unchanged.');}catch(e){notify(e.message,true);}finally{setSelfEmailBusy(false);}}}/>}</main>}
  <footer className="app-footer">© 2026 TPOS V2 — MNII Alpha Ent</footer>
  </div></div>;
 }

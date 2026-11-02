@@ -10,7 +10,7 @@ test('POS UI selects Food & Beverage versus Retail using approved tenant busines
  assert.match(ui,/getPosBusinessMode\(profile\?\.business\?\.type\)/);
  assert.match(ui,/data-pos-mode=\{businessMode\.mode\}/);
  assert.match(ui,/isFnb\?'Menu & Products':'Products'/);
- assert.match(ui,/Restaurant Tables/);
+ assert.match(ui,/Restaurant Table \/ Dine In/);
 });
 
 test('POS grid uses real categories, product images, barcode scan and branch prices',async()=>{
@@ -27,13 +27,15 @@ test('POS grid uses real categories, product images, barcode scan and branch pri
  assert.doesNotMatch(backend,/req\.headers\[['"]x-tenant/);
 });
 
-test('POS checkout remains protected until financial, inventory and table adapters exist',async()=>{
+test('POS checkout remains protected while Dine In has a dedicated table adapter',async()=>{
  const ui=await src('frontend/src/PosTerminal.jsx');
  const backend=await src('backend/src/pos-drafts.js');
  assert.match(ui,/pos-payment-methods/);
  assert.match(ui,/Checkout locked until integrations are verified/);
- assert.match(ui,/Dine In requires Restaurant Tables integration/);
- assert.match(backend,/POS_RESTAURANT_TABLES_NOT_CONNECTED/);
+ assert.match(ui,/Select Dine In Table/);
+ assert.match(backend,/POS_DINE_IN_SELECT_TABLE_FIRST/);
+ assert.match(backend,/assignPosTable/);
+ assert.match(backend,/POS_TABLE_OCCUPIED/);
  assert.match(backend,/checkoutAvailable:false/);
  assert.doesNotMatch(backend,/INSERT INTO (?:sales|pos_sales|cash_shift_movements)/i);
 });

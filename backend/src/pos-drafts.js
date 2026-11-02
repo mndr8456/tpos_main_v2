@@ -18,6 +18,7 @@ const createSchema=z.object({branchId:id,requestKey,orderScope:z.enum(['TAKE_AWA
 const addSchema=z.object({productId:id,quantity:qty,requestKey,expectedVersion:z.number().int().positive()}).strict();
 const changeSchema=z.object({quantity:qty.optional(),remove:z.boolean().optional(),requestKey,expectedVersion:z.number().int().positive()}).strict().refine(v=>(v.remove===true)!==Boolean(v.quantity),'CHANGE_OR_REMOVE_REQUIRED');
 const statusSchema=z.object({status:z.enum(['DRAFT','HELD','DISCARDED']),requestKey,expectedVersion:z.number().int().positive(),createNext:z.boolean().optional()}).strict().refine(v=>!v.createNext||v.status==='HELD','POS_CREATE_NEXT_REQUIRES_HOLD');
+const assignSchema=z.object({tableId:id.nullable(),expectedVersion:z.number().int().positive(),requestKey}).strict();
 const quoteSchema=z.object({discountCode:z.string().trim().max(50).default(''),voucherCode:z.string().trim().max(100).default('')}).strict();
 const bad=(error,status=400)=>Object.assign(new Error(error),{status});
 const has=(req,code)=>req.auth.user.permissions.includes(code);
@@ -30,7 +31,7 @@ async function activeShift(conn,req,branchId,lock=false){
  if(!row)throw bad('POS_OPEN_SHIFT_REQUIRED',409);
  return row;
 }
-const baseSql=`SELECT d.id,d.request_key,d.branch_id,d.cashier_user_id,d.shift_id,d.status,d.order_scope,d.version,DATE_FORMAT(d.created_at,'%Y-%m-%d %H:%i:%s') AS created_at,DATE_FORMAT(d.updated_at,'%Y-%m-%d %H:%i:%s') AS updated_at,b.name AS branch_name FROM pos_drafts d JOIN branches b ON b.id=d.branch_id`;
+const baseSql=`SELECT d.id,d.request_key,d.branch_id,d.cashier_user_id,d.shift_id,d.status,d.order_scope,d.table_id,t.table_number,t.table_name,d.version,DATE_FORMAT(d.created_at,'%Y-%m-%d %H:%i:%s') AS created_at,DATE_FORMAT(d.updated_at,'%Y-%m-%d %H:%i:%s') AS updated_at,b.name AS branch_name FROM pos_drafts d JOIN branches b ON b.id=d.branch_id LEFT JOIN restaurant_tables t ON t.id=d.table_id`;
 async function draft(conn,req,draftId,lock=false){
  const [[d]]=await conn.execute(`${baseSql} WHERE d.id=?${lock?' FOR UPDATE':''}`,[draftId]);
  if(!d)throw bad('POS_DRAFT_NOT_FOUND',404);
@@ -42,7 +43,7 @@ async function detail(conn,req,draftId){
  const d=await draft(conn,req,draftId);
  const [rows]=await conn.execute('SELECT id,product_id,product_name,sku,barcode,category_id,unit_code,quantity,unit_price,track_stock,product_type FROM pos_draft_lines WHERE draft_id=? ORDER BY id',[draftId]);
  const calculated=totalDraftLines(rows);
- return {draft:{...d,id:String(d.id),branch_id:String(d.branch_id),shift_id:String(d.shift_id),cashier_user_id:String(d.cashier_user_id)},...calculated,checkoutAvailable:false,checkoutBlockers:['INVENTORY_POSTING_NOT_CONNECTED','PAYMENT_CAPTURE_NOT_CONNECTED','TAX_RECEIPT_FINALIZATION_NOT_CONNECTED']};
+ return {draft:{...d,id:String(d.id),branch_id:String(d.branch_id),shift_id:String(d.shift_id),cashier_user_id:String(d.cashier_user_id),table_id:d.table_id==null?null:String(d.table_id)},...calculated,checkoutAvailable:false,checkoutBlockers:['INVENTORY_POSTING_NOT_CONNECTED','PAYMENT_CAPTURE_NOT_CONNECTED','TAX_RECEIPT_FINALIZATION_NOT_CONNECTED']};
 }
 async function log(conn,draftId,userId,action,details){await conn.execute('INSERT INTO pos_draft_audit_logs(draft_id,actor_user_id,action_type,details) VALUES(?,?,?,?)',[draftId,userId,action,JSON.stringify(details)]);}
 async function command(conn,d,action,request,params){
@@ -70,8 +71,9 @@ export async function posBootstrap(req,res){
  const [categories]=await pool.execute(`SELECT c.id,c.category_name FROM categories c WHERE c.is_deleted=0 AND c.status='ACTIVE' ORDER BY c.category_name`);
  // Only return branch prices for authorized branches in this authenticated tenant pool.
  const [branchPriceRows]=visible.length?await pool.execute(`SELECT product_id,branch_id,selling_price FROM product_branch_prices WHERE branch_id IN (${visible.map(()=>'?').join(',')})`,visible.map(b=>b.id)):[[]];
+ const [tableRows]=await pool.execute(`SELECT t.id,t.branch_id,t.table_number,t.table_name,t.table_area,t.seating_capacity,t.table_status,CASE WHEN d.id IS NULL THEN t.table_status ELSE 'OCCUPIED' END AS occupancy,d.id AS draft_id,d.cashier_user_id AS assigned_cashier FROM restaurant_tables t LEFT JOIN pos_drafts d ON d.active_table_id=t.id WHERE t.is_deleted=0 AND t.status='ACTIVE' ORDER BY t.branch_id,t.table_area,t.sort_order,t.table_number`);
  const [methods]=await pool.execute('SELECT branch_id,method_code,is_active FROM payment_method_settings WHERE is_active=1 AND method_code<>\'SARA_MYKASIH\'');
- return res.set('Cache-Control','no-store').json({branches:visible.map(b=>({...b,id:String(b.id)})),openShifts:shifts.filter(s=>visible.some(b=>String(b.id)===String(s.branch_id))).map(s=>({...s,id:String(s.id),branch_id:String(s.branch_id)})),products:products.map(p=>({...p,id:String(p.id),category_id:String(p.category_id)})),categories:categories.map(c=>({...c,id:String(c.id)})),branchPrices:branchPriceRows.map(bp=>({product_id:String(bp.product_id),branch_id:String(bp.branch_id),selling_price:String(bp.selling_price)})),enabledPaymentMethods:methods.filter(m=>visible.some(b=>String(b.id)===String(m.branch_id))),checkoutAvailable:false,stage:'DURABLE_CART_AND_READ_ONLY_QUOTE'});
+ return res.set('Cache-Control','no-store').json({branches:visible.map(b=>({...b,id:String(b.id)})),openShifts:shifts.filter(s=>visible.some(b=>String(b.id)===String(s.branch_id))).map(s=>({...s,id:String(s.id),branch_id:String(s.branch_id)})),products:products.map(p=>({...p,id:String(p.id),category_id:String(p.category_id)})),categories:categories.map(c=>({...c,id:String(c.id)})),branchPrices:branchPriceRows.map(bp=>({product_id:String(bp.product_id),branch_id:String(bp.branch_id),selling_price:String(bp.selling_price)})),restaurantTables:['RESTAURANT','CAFE'].includes(req.auth.company.business_type)?tableRows.filter(t=>visible.some(b=>String(b.id)===String(t.branch_id))).map(t=>({...t,id:String(t.id),branch_id:String(t.branch_id),draft_id:t.draft_id==null?null:String(t.draft_id)})):[],enabledPaymentMethods:methods.filter(m=>visible.some(b=>String(b.id)===String(m.branch_id))),checkoutAvailable:false,stage:'DURABLE_CART_AND_READ_ONLY_QUOTE'});
 }
 export async function listPosDrafts(req,res){
  const [rows]=await req.auth.pool.execute(`${baseSql} WHERE d.cashier_user_id=? AND d.status IN ('DRAFT','HELD') ORDER BY d.updated_at DESC LIMIT 100`,[req.auth.user.id]);
@@ -80,7 +82,7 @@ export async function listPosDrafts(req,res){
 export async function createPosDraft(req,res){
  if(!has(req,'pos.cart.manage'))throw bad('POS_WRITE_DENIED',403);
  const data=createSchema.parse(req.body);access(req,data.branchId);
- if(data.orderScope!=='TAKE_AWAY')throw bad('POS_RESTAURANT_TABLES_NOT_CONNECTED',409);
+ if(data.orderScope!=='TAKE_AWAY')throw bad('POS_DINE_IN_SELECT_TABLE_FIRST',409);
  const result=await transact(req.auth.pool,async conn=>{
   const shift=await activeShift(conn,req,data.branchId,true);
   const [[previous]]=await conn.execute('SELECT id,branch_id,cashier_user_id,shift_id,order_scope FROM pos_drafts WHERE request_key=?',[data.requestKey]);
@@ -156,6 +158,7 @@ export async function changePosDraftStatus(req,res){
   if(data.createNext&&String(shift.id)!==String(d.shift_id))throw bad('POS_ORIGINAL_SHIFT_CLOSED',409);
   await conn.execute('UPDATE pos_drafts SET status=?,version=version+1,updated_at=UTC_TIMESTAMP(6) WHERE id=?',[data.status,d.id]);
   await log(conn,d.id,req.auth.user.id,data.status==='HELD'?'HOLD':data.status==='DRAFT'?'RESUME':'DISCARD',{oldStatus:d.status,status:data.status});
+  if(data.status==='DISCARDED'&&d.table_id)await conn.execute('INSERT INTO restaurant_table_audit_logs(table_id,actor_user_id,action_type,details) VALUES(?,?,?,?)',[d.table_id,req.auth.user.id,'RELEASE',JSON.stringify({draftId:String(d.id),reason:'DISCARDED'})]);
   if(data.createNext){
    // Hold and successor CREATE are one atomic tenant-database transaction.
    // The command UUID doubles as the successor's unique creation key, so retries
@@ -216,4 +219,40 @@ export async function posDraftAudit(req,res){
  const draftId=id.parse(req.params.id);await draft(req.auth.pool,req,draftId);
  const [logs]=await req.auth.pool.execute(`SELECT a.id,a.action_type,a.details,DATE_FORMAT(a.created_at,'%Y-%m-%d %H:%i:%s') AS created_at,u.full_name AS actor_name FROM pos_draft_audit_logs a JOIN users u ON u.id=a.actor_user_id WHERE a.draft_id=? ORDER BY a.id DESC LIMIT 300`,[draftId]);
  return res.set('Cache-Control','no-store').json({logs});
+}
+
+// R1 Dine In: assign an existing own DRAFT to a real restaurant table.
+// Lock table FIRST, then draft to serialize two cashiers competing for one table.
+// No sale/receipt/payment/stock posting; HELD retains table occupancy.
+export async function assignPosTable(req,res){
+ if(!has(req,'pos.cart.manage'))throw bad('POS_WRITE_DENIED',403);
+ if(!['RESTAURANT','CAFE'].includes(req.auth.company.business_type))throw bad('POS_DINE_IN_NOT_APPLICABLE',403);
+ const draftId=id.parse(req.params.id),data=assignSchema.parse(req.body);
+ const result=await transact(req.auth.pool,async conn=>{
+  // Reading branch before locking lets us lock table first, then draft, consistently.
+  const [[reference]]=await conn.execute('SELECT branch_id,cashier_user_id,table_id FROM pos_drafts WHERE id=?',[draftId]);
+  if(!reference)throw bad('POS_DRAFT_NOT_FOUND',404);
+  if(String(reference.cashier_user_id)!==String(req.auth.user.id))throw bad('POS_DRAFT_NOT_OWNED',403);
+  access(req,reference.branch_id);
+  const tableIds=[reference.table_id,data.tableId].filter(Boolean).map(Number).sort((a,b)=>a-b);
+  const lockedTables=new Map();
+  for(const t of new Set(tableIds)){const [[table]]=await conn.execute('SELECT * FROM restaurant_tables WHERE id=? AND is_deleted=0 FOR UPDATE',[t]);if(table)lockedTables.set(t,table);}
+  const d=await draft(conn,req,draftId,true);
+  const should=await command(conn,d,'ASSIGN_TABLE',data.requestKey,{tableId:data.tableId,expectedVersion:data.expectedVersion});
+  if(!should)return detail(conn,req,d.id);
+  await ensureEditable(conn,req,d);
+  if(data.tableId!==null){
+   const table=lockedTables.get(data.tableId);
+   if(!table||String(table.branch_id)!==String(d.branch_id))throw bad('POS_TABLE_NOT_IN_BRANCH',409);
+   if(table.status!=='ACTIVE'||table.table_status!=='AVAILABLE')throw bad('POS_TABLE_NOT_AVAILABLE',409);
+   const [[occupied]]=await conn.execute('SELECT id,cashier_user_id FROM pos_drafts WHERE active_table_id=? AND id<>? LIMIT 1',[table.id,d.id]);
+   if(occupied)throw bad('POS_TABLE_OCCUPIED',409);
+  }
+  const prior=d.table_id;
+  await conn.execute('UPDATE pos_drafts SET table_id=?,order_scope=?,version=version+1,updated_at=UTC_TIMESTAMP(6) WHERE id=?',[data.tableId,data.tableId===null?'TAKE_AWAY':'DINE_IN',d.id]);
+  if(prior&&String(prior)!==String(data.tableId))await conn.execute('INSERT INTO restaurant_table_audit_logs(table_id,actor_user_id,action_type,details) VALUES(?,?,?,?)',[prior,req.auth.user.id,'RELEASE',JSON.stringify({draftId:String(d.id),reason:'REASSIGN'})]);
+  if(data.tableId&&String(prior)!==String(data.tableId))await conn.execute('INSERT INTO restaurant_table_audit_logs(table_id,actor_user_id,action_type,details) VALUES(?,?,?,?)',[data.tableId,req.auth.user.id,'ASSIGN',JSON.stringify({draftId:String(d.id),shiftId:String(d.shift_id)})]);
+  await log(conn,d.id,req.auth.user.id,'ASSIGN_TABLE',{tableId:data.tableId,previousTableId:prior});
+  return detail(conn,req,d.id);
+ });res.set('Cache-Control','no-store').json(result);
 }

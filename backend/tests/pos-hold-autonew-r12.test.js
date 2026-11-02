@@ -13,7 +13,7 @@ const style=fs.readFileSync(path.join(root,'frontend/src/PosTerminal.css'),'utf8
 
 function mockZod(){
  const v={};
- for(const name of ['int','positive','max','regex','refine','strict','default','optional','trim','uuid','min'])v[name]=()=>v;
+ for(const name of ['int','positive','max','regex','refine','strict','default','optional','nullable','trim','uuid','min'])v[name]=()=>v;
  v.parse=input=>input;
  return {coerce:{number:()=>v},number:()=>v,string:()=>v,enum:()=>v,boolean:()=>v,object:()=>v};
 }

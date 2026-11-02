@@ -1,0 +1,14 @@
+.rt-page .rt-stats{margin-bottom:20px}
+.rt-modal{max-height:90vh;overflow-y:auto}
+.rt-form-block{padding:14px 0}
+.rt-form-block h3{display:flex;align-items:center;gap:9px;font-size:15px;margin:0 0 16px}
+.rt-form-block .muted{font-size:12px;margin-top:14px}
+.rt-file{display:inline-flex;align-items:center;gap:8px;cursor:pointer;position:relative}
+.rt-file input{position:absolute;inset:0;opacity:0;width:100%;cursor:pointer}
+.rt-import-actions{display:flex;flex-wrap:wrap;gap:8px;margin:15px 0}
+.rt-import-actions .outline,.rt-import-actions .primary{display:flex;align-items:center;gap:8px}
+.rt-view{display:grid;gap:9px}.rt-view p{display:flex;gap:9px;align-items:center;margin:7px 0}
+.rt-page .row-actions .action-icon{padding:5px;width:31px;height:31px}
+.rt-page .row-actions{display:flex;align-items:center;gap:5px}
+.rt-page td small{display:block;font-size:10px;margin-top:4px;color:var(--muted,#69788a)}
+@media(max-width:740px){.rt-page .tools{flex-wrap:wrap}.rt-modal .form-two{grid-template-columns:1fr}}

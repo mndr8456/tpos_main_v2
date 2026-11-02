@@ -1,58 +1,56 @@
-// Downloadable Discount Master report, generated locally without a remote renderer.
-// Discounts are reusable rules, not one-time vouchers: do not print voucher barcodes.
+// Discount PDF uses the same physical page size and card visual hierarchy as Voucher.
+// Its Code128 and QR encode discount RULE identifiers, not POS-redeemable bearer codes.
+import {qrSvg,barcodeSvg,svgData} from './discount-codes-render.js';
 import {buildPdfFromJpegs} from './voucher-pdf.js';
 
-const money = value => Number(value ?? 0).toFixed(2);
-const date = value => value ? String(value).slice(0,10) : '—';
-const label = discount => discount.discount_type === 'PERCENTAGE'
-  ? `${money(discount.discount_value)}%`
-  : `RM ${money(discount.discount_value)}`;
-const text = value => String(value ?? '');
-
-function jpegData(canvas){
- const data=canvas.toDataURL('image/jpeg',0.94);
- const binary=atob(data.slice(data.indexOf(',')+1));
- const bytes=new Uint8Array(binary.length);
- for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
- return bytes;
+const money=value=>Number(value??0).toFixed(2);
+const validity=value=>value?String(value).slice(0,16).replace('T',' '):'No date restriction';
+function fit(ctx,text,maxWidth,size,weight='700',min=10){
+ let n=size;while(n>min){ctx.font=`${weight} ${n}px Arial, sans-serif`;if(ctx.measureText(text).width<=maxWidth)break;n--;}
+ ctx.font=`${weight} ${n}px Arial, sans-serif`;return n;
 }
-
-export function drawDiscountReportPage(ctx,records,company,pageNo,totalPages){
- const width=ctx.canvas.width,height=ctx.canvas.height;
- ctx.fillStyle='#ffffff';ctx.fillRect(0,0,width,height);
- const pad=65;
- ctx.fillStyle='#163b6c';ctx.font='bold 38px Arial';ctx.fillText('Discounts Report',pad,85);
- ctx.fillStyle='#526985';ctx.font='22px Arial';ctx.fillText(text(company).slice(0,80),pad,120);
- ctx.font='17px Arial';ctx.fillText(`${records.length} record(s) on this page  |  ${new Date().toLocaleDateString('en-MY')}`,pad,152);
- const columns=[{name:'CODE',x:pad},{name:'DISCOUNT',x:220},{name:'SCOPE',x:570},{name:'VALUE',x:720},{name:'VALIDITY',x:850},{name:'STATUS',x:1290}];
- ctx.fillStyle='#e8f0fa';ctx.fillRect(pad,190,width-2*pad,50);
- ctx.fillStyle='#173d6e';ctx.font='bold 17px Arial';
- columns.forEach(c=>ctx.fillText(c.name,c.x,223));
- records.forEach((d,i)=>{
-  const y=258+i*35;
-  if(i%2===0){ctx.fillStyle='#f5f8fd';ctx.fillRect(pad,y-23,width-2*pad,35);}
-  ctx.fillStyle='#1b385a';ctx.font='16px Arial';
-  ctx.fillText(text(d.discount_code).slice(0,16),pad,y);
-  ctx.fillText(text(d.discount_name).slice(0,36),220,y);
-  ctx.fillText(text(d.discount_scope).slice(0,14),570,y);
-  ctx.fillText(label(d),720,y);
-  ctx.fillText(`${date(d.start_date)} / ${date(d.end_date)}`,850,y);
-  ctx.fillText(text(d.status),1290,y);
- });
- ctx.fillStyle='#627895';ctx.font='16px Arial';
- ctx.fillText(`TPOS V2 | Page ${pageNo} of ${totalPages}`,pad,height-42);
-}
-
-export async function generateDiscountPdf(discounts,company){
- if(!Array.isArray(discounts)||discounts.length===0)throw new Error('NO_DISCOUNTS_TO_EXPORT');
- if(discounts.length>1000)throw new Error('PDF_EXPORT_LIMIT_1000');
+function loadSvg(svg){return new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error('DISCOUNT_CODE_IMAGE_FAILED'));img.src=svgData(svg);});}
+function jpegBytes(canvas){const uri=canvas.toDataURL('image/jpeg',0.98),binary=atob(uri.slice(uri.indexOf(',')+1));const bytes=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);return bytes;}
+export async function generateDiscountPdf(discounts,company,settings={widthCm:'18.55',heightCm:'8.45'}){
+ if(!Array.isArray(discounts)||!discounts.length)throw new Error('NO_DISCOUNTS_TO_EXPORT');
+ if(discounts.length>100)throw new Error('PDF_EXPORT_LIMIT_100');
  if(typeof document==='undefined')throw new Error('PDF_REQUIRES_BROWSER');
- const perPage=20,pageCount=Math.ceil(discounts.length/perPage),pages=[];
- for(let index=0;index<pageCount;index++){
-  const canvas=document.createElement('canvas');canvas.width=1587;canvas.height=1123;
+ const wcm=Number(settings.widthCm),hcm=Number(settings.heightCm);
+ if(!Number.isFinite(wcm)||wcm<5||wcm>30||!Number.isFinite(hcm)||hcm<3||hcm>20)throw new Error('INVALID_PRINT_DIMENSIONS');
+ const codes=discounts.map(d=>String(d.discount_code||'').toUpperCase());
+ if(new Set(codes).size!==codes.length)throw new Error('DUPLICATE_DISCOUNT_CODE_IN_EXPORT');
+ const pages=[];
+ for(const discount of discounts){
+  const code=String(discount.discount_code||'').toUpperCase();
+  const [bar,qr]=await Promise.all([loadSvg(barcodeSvg(code)),loadSvg(qrSvg(code))]);
+  const dpi=220,width=Math.round(wcm/2.54*dpi),height=Math.round(hcm/2.54*dpi);
+  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
   const ctx=canvas.getContext('2d');if(!ctx)throw new Error('PDF_CANVAS_UNAVAILABLE');
-  drawDiscountReportPage(ctx,discounts.slice(index*perPage,(index+1)*perPage),company,index+1,pageCount);
-  pages.push({jpeg:jpegData(canvas),pixelWidth:canvas.width,pixelHeight:canvas.height,widthPt:841.89,heightPt:595.28});
+  const scale=Math.min(width/700,height/320);
+  const pad=Math.max(10,18*scale),rightWidth=Math.min(height*.56,width*.28),leftW=width-rightWidth-pad*3;
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height);ctx.fillStyle='#f1f7ff';ctx.fillRect(pad,pad,width-pad*2,height-pad*2);
+  ctx.strokeStyle='#bed3ee';ctx.lineWidth=Math.max(1,1.3*scale);ctx.strokeRect(pad,pad,width-pad*2,height-pad*2);
+  const x=pad*1.7,maxW=leftW-pad;
+  ctx.textAlign='left';ctx.textBaseline='top';ctx.fillStyle='#2b5fa4';
+  fit(ctx,String(company),maxW,14*scale,'800',9);ctx.fillText(String(company),x,pad*1.45,maxW);
+  ctx.fillStyle='#59728b';fit(ctx,'DISCOUNT RULE · NOT A VOUCHER',maxW,9*scale,'700',7);ctx.fillText('DISCOUNT RULE · NOT A VOUCHER',x,pad*2.65,maxW);
+  ctx.fillStyle='#143861';fit(ctx,String(discount.discount_name),maxW,27*scale,'800',12);ctx.fillText(String(discount.discount_name),x,pad*3.45,maxW);
+  const value=discount.discount_type==='PERCENTAGE'?`${money(discount.discount_value)}%`:`RM ${money(discount.discount_value)}`;
+  ctx.fillStyle='#165bb5';fit(ctx,value,maxW,37*scale,'900',16);ctx.fillText(value,x,pad*5.45,maxW);
+  const description=String(discount.description||'Discount master rule reference. Not a redeemable voucher.');
+  ctx.fillStyle='#59728b';fit(ctx,description,maxW,11*scale,'400',9);ctx.fillText(description,x,pad*7.75,maxW);
+  const bw=Math.min(leftW*.84,310*scale),bh=Math.min(58*scale,height*.16);
+  const bx=x+(leftW-bw)/2,by=height-pad*2.1-bh-39*scale;
+  ctx.fillStyle='#fff';ctx.fillRect(bx,by,bw,bh);ctx.imageSmoothingEnabled=false;ctx.drawImage(bar,bx,by,bw,bh);
+  ctx.imageSmoothingEnabled=true;ctx.textAlign='center';ctx.fillStyle='#143861';fit(ctx,code,bw,13*scale,'800',9);ctx.fillText(code,bx+bw/2,by+bh+4*scale,bw);
+  const dates=`Valid: ${validity(discount.start_date)} – ${validity(discount.end_date)}`;
+  ctx.fillStyle='#596f89';fit(ctx,dates,bw*1.1,10*scale,'400',7);ctx.fillText(dates,bx+bw/2,by+bh+20*scale,bw*1.1);
+  const q=Math.min(rightWidth-pad*.5,height*.52),qx=width-pad*1.7-q,qy=(height-q)/2-8*scale;
+  ctx.fillStyle='#fff';ctx.fillRect(qx-4*scale,qy-4*scale,q+8*scale,q+8*scale);
+  ctx.imageSmoothingEnabled=false;ctx.drawImage(qr,qx,qy,q,q);ctx.imageSmoothingEnabled=true;
+  ctx.fillStyle='#596f89';ctx.textAlign='center';fit(ctx,'Rule reference only',rightWidth,10*scale,'400',7);ctx.fillText('Rule reference only',qx+q/2,qy+q+9*scale,rightWidth);
+  fit(ctx,'Not redeemable',rightWidth,9*scale,'400',7);ctx.fillText('Not redeemable',qx+q/2,qy+q+22*scale,rightWidth);
+  pages.push({jpeg:jpegBytes(canvas),pixelWidth:width,pixelHeight:height,widthPt:wcm*72/2.54,heightPt:hcm*72/2.54});
  }
  return buildPdfFromJpegs(pages);
 }
