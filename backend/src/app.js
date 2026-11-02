@@ -31,7 +31,15 @@ export function createApp(){
  const app=express();
  app.disable('x-powered-by');
  app.use(helmet());
- app.use(cors({origin:settings.origin,credentials:true}));
+ app.use(cors({
+  origin: [
+    'https://tpos-main-v2.vercel.app', 
+    /\.vercel\.app$/, 
+    'http://127.0.0.1:5174', 
+    'http://localhost:5174'
+  ],
+  credentials: true
+}));
  app.use('/api/v2/products/import',express.json({limit:'24mb'}));
  app.use('/api/v2/discounts/import',express.json({limit:'2mb'}));
  app.use('/api/v2/vouchers/import',express.json({limit:'2mb'}));
