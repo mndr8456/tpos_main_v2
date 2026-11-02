@@ -21,7 +21,8 @@ import {getSstSettings,saveSstSettings,listSstAudit} from './sst-settings.js';
 import {getServiceChargeSettings,saveServiceChargeSettings,listServiceChargeAudit} from './service-charge.js';
 import {posBootstrap,listPosDrafts,createPosDraft,getPosDraft,addPosLine,changePosLine,changePosDraftStatus,quotePosDraft,posDraftAudit,assignPosTable} from './pos-drafts.js';
 import {tableMeta,listTables,createTable,updateTable,archiveTable,tableAudit,exportTables,tableTemplate,previewTableImport,importTables} from './restaurant-tables.js';
-import {inventoryBalances,inventoryMovements,openInventoryBalance} from './inventory.js';
+import {inventoryMeta,inventoryBalances,inventoryMovements,openInventoryBalance} from './inventory.js';
+import {cashCheckout,getCashReceipt} from './pos-cash-checkout.js';
 import {listPaymentMethods,savePaymentMethod,uploadPaymentImage,removePaymentImage,readPaymentImage,paymentMethodAudit} from './payment-methods.js';
 import {cashDrawerMeta,listCashDrawer,recordCashDrawerOpen,cashDrawerAudit,exportCashDrawer} from './cash-drawer.js';
 import {voucherOwnerOnly} from './voucher-owner-guard.js';
@@ -72,6 +73,7 @@ export function createApp(){
  app.post('/api/v2/restaurant-tables',authenticate,permitted('restaurant_tables.create'),createTable);
  app.put('/api/v2/restaurant-tables/:id',authenticate,permitted('restaurant_tables.update'),updateTable);
  app.delete('/api/v2/restaurant-tables/:id',authenticate,permitted('restaurant_tables.delete'),archiveTable);
+ app.get('/api/v2/inventory/meta',authenticate,permitted('inventory.view'),inventoryMeta);
  app.get('/api/v2/inventory/balances',authenticate,permitted('inventory.view'),inventoryBalances);
  app.get('/api/v2/inventory/movements',authenticate,permitted('inventory.audit'),inventoryMovements);
  app.post('/api/v2/inventory/opening',authenticate,permitted('inventory.opening'),openInventoryBalance);
@@ -84,6 +86,8 @@ export function createApp(){
  app.patch('/api/v2/pos/drafts/:id/status',authenticate,permitted('pos.cart.manage'),changePosDraftStatus);
  app.patch('/api/v2/pos/drafts/:id/table',authenticate,permitted('pos.cart.manage'),assignPosTable);
  app.post('/api/v2/pos/drafts/:id/quote',authenticate,permitted('pos.view'),quotePosDraft);
+ app.post('/api/v2/pos/drafts/:id/checkout/cash',authenticate,permitted('pos.checkout.cash'),cashCheckout);
+ app.get('/api/v2/pos/sales/:saleId/receipt',authenticate,permitted('pos.view'),getCashReceipt);
  app.get('/api/v2/pos/drafts/:id/audit',authenticate,permitted('pos.audit'),posDraftAudit);
  app.get('/api/v2/payment-methods',authenticate,permitted('payment_methods.view'),listPaymentMethods);
  app.get('/api/v2/payment-methods/audit',authenticate,permitted('payment_methods.audit'),paymentMethodAudit);

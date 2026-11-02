@@ -52,8 +52,8 @@ test('Shift R1.2 form requires user acknowledgement only for nonzero variances a
  assert.match(src,/checked=\{acknowledged\}/);
  assert.match(src,/varianceAcknowledged:nonZero&&acknowledged/);
  assert.match(src,/expectedManualCash:String\(shift\.manualExpected\)/);
- assert.match(src,/I understand this is based on manual cash only/);
- assert.match(src,/Any variance shown is provisional/);
+ assert.match(src,/I understand it includes posted POS cash sales/);
+ assert.match(src,/Expected cash includes opening float, manual movements, and posted POS cash sales/);
  assert.match(src,/\{auditDetails\(l\)\}/);
  assert.doesNotMatch(src,/typeof l\.details==='string'\?l\.details/);
 });

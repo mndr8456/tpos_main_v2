@@ -49,7 +49,7 @@ test('POS takes tenant Sales Tax rate and ignores legacy inclusive flag',()=>{
  assert.equal(bill.salesTax,'8.00');
  assert.equal(bill.salesTaxInclusive,'0.00');
  assert.equal(bill.total,'108.00');
- assert.match(backend,/readSstSettings\(req\.auth\.pool\)/);
+ assert.match(backend,/readSstSettings\(conn\)/);
 });
 test('Service Tax remains separate, and tenant OFF prevents the charge',()=>{
  const product={jkdm_tax_type:'SERVICE_TAX',jkdm_tax_inclusive:0};

@@ -83,7 +83,7 @@ test('R1 Hold never frees table, Discard records release audit, checkout stays b
  assert.match(pos,/reason:'DISCARDED'/);
  assert.match(terminal,/Select Dine In Table/);
  assert.match(terminal,/Held \/ Saved Orders/);
- assert.match(terminal,/Checkout locked until integrations are verified/);
+ assert.match(terminal,/Card, bank, QR and E-Wallet methods remain unavailable/);
  assert.match(pos,/checkoutAvailable:false/);
 });
 test('Installer is explicit --apply, registers new tenants and refuses partial migration',()=>{

@@ -34,12 +34,12 @@ test('Cash Shift R1 manual movements are immutable, idempotent and audited in sa
  assert.match(api,/await audit\(conn,id,req\.auth\.user\.id,data\.direction/);
  assert.doesNotMatch(api,/\bDELETE FROM cash_shift_movements\b|\bUPDATE cash_shift_movements\b/i);
 });
-test('Cash Shift R1 prevents counting POS sales without a real transaction adapter',async()=>{
+test('Cash Shift includes posted cash sales and preserves manual cash subtotal',async()=>{
  const api=await source('backend/src/cash-shifts.js'),ui=await source('frontend/src/CashShifts.jsx');
- assert.match(api,/expectedBasis:'OPENING_FLOAT_AND_MANUAL_MOVEMENTS_ONLY'/);
- assert.match(api,/posIntegration:'NOT_CONNECTED'/);
- assert.match(ui,/POS cash sales are not connected in R1/);
- assert.match(ui,/Any variance shown is provisional/);
+ assert.match(api,/cashSalesSen\(conn,id\)/);
+ assert.match(api,/expectedBasis:'OPENING_PLUS_MANUAL_AND_POSTED_CASH_SALES'/);
+ assert.match(ui,/expectedPosCash:String\(shift.posCashSales\)/);
+ assert.match(ui,/Posted cash sales are included in shift closing totals/);
 });
 test('Cash Shift R1 role scope enforces cashier own and higher roles all; branch guard on writes',async()=>{
  const api=await source('backend/src/cash-shifts.js'),sql=await source('database/013_tenant_cash_shifts.sql');
@@ -55,7 +55,7 @@ test('Cash Shift R1 close transaction locks shift and records actual, provisiona
  assert.match(api,/FOR UPDATE/);
  assert.match(api,/SHIFT_ALREADY_CLOSED/);
  assert.match(api,/MANAGER_CLOSE_REASON_REQUIRED/);
- assert.match(api,/variance=counted-expected/);
+ assert.match(api,/variance=counted-totalExpected/);
  assert.match(api,/closed_at=UTC_TIMESTAMP\(6\)/);
  assert.match(api,/await audit\(conn,id,req\.auth\.user\.id,'CLOSE'/);
 });

@@ -43,7 +43,7 @@ test('SST endpoints are permission-guarded; owner-only updates and audit',()=>{
 });
 test('New tenants receive 018 and POS derives SST policy from tenant DB',()=>{
  const tenant=src('backend/src/tenants.js'),pos=src('backend/src/pos-drafts.js'),app=src('frontend/src/App.jsx'),view=src('frontend/src/SstSettings.jsx');
- assert.match(tenant,/018_tenant_sst_settings.sql/);assert.match(pos,/const sstSettings=await readSstSettings\(req.auth.pool\)/);
+ assert.match(tenant,/018_tenant_sst_settings.sql/);assert.match(pos,/const sstSettings=await readSstSettings\(conn\)/);
  assert.match(pos,/applySstPolicy\(item,sstSettings\)/);assert.match(app,/canViewSst/);
  assert.match(view,/GST \/ SST Settings/);assert.match(view,/SST Sales Tax/);assert.match(view,/SST Service Tax/);assert.match(view,/Enable Tax/);
 });

@@ -18,7 +18,7 @@ export const auditDetails=entry=>{
  if(entry.action_type==='CASH_IN'||entry.action_type==='CASH_OUT')return `${entry.action_type==='CASH_IN'?'Cash In':'Cash Out'}: ${currency(value.amount)}${extra} · Manual expected: ${currency(value.manualExpected)}`;
  if(entry.action_type==='CLOSE'){
   const variance=Number(value.variance||0),label=variance>0?'Surplus':variance<0?'Shortage':'Balanced';
-  return `Counted: ${currency(value.countedCash)} · Manual expected: ${currency(value.manualExpected)} · ${label}: ${currency(value.variance)}${extra} · POS not connected`;
+  return `Counted: ${currency(value.countedCash)} · Manual expected: ${currency(value.manualExpected)}${value.posCashSales!==undefined?` · POS Cash Sales: ${currency(value.posCashSales)} · Expected Cash: ${currency(value.totalExpected)}`:''} · ${label}: ${currency(value.variance)}${extra}${value.posCashSales===undefined?' · POS not connected':''}`;
  }
  return note?`Reason: ${String(note)}`:'Action recorded';
 };

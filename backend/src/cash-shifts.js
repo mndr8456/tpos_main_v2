@@ -27,6 +27,10 @@ const selectOne=`SELECT s.id,s.branch_id,b.name AS branch_name,s.cashier_user_id
  FROM cash_shifts s JOIN branches b ON b.id=s.branch_id JOIN users u ON u.id=s.cashier_user_id`;
 async function findShift(conn,id,lock=false){const [[shift]]=await conn.execute(`${selectOne} WHERE s.id=?${lock?' FOR UPDATE':''}`,[id]);if(!shift)throw fail('SHIFT_NOT_FOUND',404);return shift;}
 async function audit(conn,shiftId,userId,action,details){await conn.execute('INSERT INTO cash_shift_audit_logs(shift_id,actor_user_id,action_type,details,recorded_at) VALUES(?,?,?,?,UTC_TIMESTAMP(6))',[shiftId,userId,action,JSON.stringify(details)]);}
+async function cashSalesSen(conn,shiftId){
+ const [[r]]=await conn.execute("SELECT COALESCE(SUM(total),0) AS cash_total FROM pos_sales WHERE shift_id=? AND payment_method='CASH' AND status='PAID'",[shiftId]);
+ return parseSen(String(r.cash_total));
+}
 const amountText=v=>fmtSen(parseSen(v));
 const csvSafe=x=>{const text=String(x??'');return `"${(/^[=+@-]/.test(text)?"'":'')+text.replaceAll('"','""')}\"`;};
 
@@ -35,7 +39,7 @@ export async function shiftMeta(req,res){
  return res.json({branches:branches.filter(b=>admin(req)||req.auth.user.branchIds.includes(String(b.id))),scope:all(req)?'ALL':'OWN',
  canOpen:has(req,'cash_shifts.open'),canMoveOwn:has(req,'cash_shifts.move.own'),canMoveAny:manageOther(req)&&has(req,'cash_shifts.move.any'),
  canCloseOwn:has(req,'cash_shifts.close.own'),canCloseAny:manageOther(req)&&has(req,'cash_shifts.close.any'),
- posIntegration:'NOT_CONNECTED',expectedBasis:'OPENING_FLOAT_AND_MANUAL_MOVEMENTS_ONLY'});
+ posIntegration:'CASH_CONNECTED',expectedBasis:'OPENING_PLUS_MANUAL_AND_POSTED_CASH_SALES'});
 }
 export async function listShifts(req,res){
  const query=z.object({status:z.enum(['ALL','OPEN','CLOSED']).default('ALL'),branchId:z.string().regex(/^[1-9][0-9]*$/).optional()}).strict().parse(req.query);
@@ -44,7 +48,7 @@ export async function listShifts(req,res){
  if(query.status!=='ALL'){filters.push('s.status=?');params.push(query.status);}
  if(query.branchId){filters.push('s.branch_id=?');params.push(query.branchId);}
  const [rows]=await req.auth.pool.execute(`${selectOne}${filters.length?' WHERE '+filters.join(' AND '):''} ORDER BY s.id DESC LIMIT 500`,params);
- return res.json({shifts:rows,scope:all(req)?'ALL':'OWN',posIntegration:'NOT_CONNECTED'});
+ return res.json({shifts:rows,scope:all(req)?'ALL':'OWN',posIntegration:'CASH_CONNECTED'});
 }
 export async function shiftDetails(req,res){
  const id=parseId(req);const shift=await findShift(req.auth.pool,id);assertVisible(req,shift);
@@ -52,7 +56,7 @@ export async function shiftDetails(req,res){
  DATE_FORMAT(m.recorded_at,'%Y-%m-%d %H:%i:%s') AS recorded_at,u.full_name AS actor_name
  FROM cash_shift_movements m JOIN users u ON u.id=m.actor_user_id WHERE m.shift_id=? ORDER BY m.id`,[id]);
  const pending=shift.status==='OPEN'?expectedSen(shift.opening_cash,movements):parseSen(String(shift.manual_expected_cash));
- return res.json({shift,movements,manualExpected:fmtSen(pending),posIntegration:'NOT_CONNECTED',expectedBasis:'OPENING_FLOAT_AND_MANUAL_MOVEMENTS_ONLY'});
+ const sales=await cashSalesSen(req.auth.pool,id);return res.json({shift,movements,manualExpected:fmtSen(pending),posCashSales:fmtSen(sales),expectedCash:fmtSen(pending+sales),posIntegration:'CASH_CONNECTED',expectedBasis:'OPENING_PLUS_MANUAL_AND_POSTED_CASH_SALES'});
 }
 export async function openShift(req,res){
  const data=z.object({branchId:positiveId,openingCash:money,notes:z.string().trim().max(500).optional().default('')}).strict().parse(req.body);
@@ -93,14 +97,15 @@ export async function addShiftMovement(req,res){
 }
 export async function closeShift(req,res){
  const id=parseId(req);if(!operator(req))throw fail('SHIFT_ACTION_DENIED',403);
- const data=z.object({countedCash:money,notes:z.string().trim().max(1000).optional().default(''),expectedManualCash:money.optional(),varianceAcknowledged:z.boolean().optional().default(false)}).strict().parse(req.body);
+ const data=z.object({countedCash:money,notes:z.string().trim().max(1000).optional().default(''),expectedManualCash:money.optional(),expectedPosCash:money.optional(),varianceAcknowledged:z.boolean().optional().default(false)}).strict().parse(req.body);
  const result=await txn(req.auth.pool,async conn=>{
   const shift=await findShift(conn,id,true);assertAction(req,shift,'cash_shifts.close.own','cash_shifts.close.any');
   if(shift.status!=='OPEN')throw fail('SHIFT_ALREADY_CLOSED',409);
   if(String(shift.cashier_user_id)!==String(req.auth.user.id)&&data.notes.length<8)throw fail('MANAGER_CLOSE_REASON_REQUIRED');
   const [movements]=await conn.execute('SELECT direction,amount FROM cash_shift_movements WHERE shift_id=?',[id]);
-  const expected=expectedSen(shift.opening_cash,movements),counted=parseSen(data.countedCash),variance=counted-expected;
+  const expected=expectedSen(shift.opening_cash,movements),posCash=await cashSalesSen(conn,id),totalExpected=expected+posCash,counted=parseSen(data.countedCash),variance=counted-totalExpected;
   if(data.expectedManualCash!==undefined&&parseSen(data.expectedManualCash)!==expected)throw fail('SHIFT_EXPECTED_BALANCE_CHANGED',409);
+  if(posCash>0n&&(data.expectedPosCash===undefined||parseSen(data.expectedPosCash)!==posCash))throw fail('SHIFT_POS_CASH_BALANCE_CHANGED',409);
   if(variance!==0n){
    if(data.expectedManualCash===undefined||!data.varianceAcknowledged)throw fail('SHIFT_VARIANCE_ACK_REQUIRED',409);
    if(data.notes.length<8)throw fail('SHIFT_VARIANCE_REASON_REQUIRED');
@@ -108,10 +113,10 @@ export async function closeShift(req,res){
   const [update]=await conn.execute(`UPDATE cash_shifts SET status='CLOSED',closed_by=?,closed_at=UTC_TIMESTAMP(6),counted_cash=?,manual_expected_cash=?,cash_variance=?,closing_notes=? WHERE id=? AND status='OPEN'`,
    [req.auth.user.id,fmtSen(counted),fmtSen(expected),fmtSen(variance),data.notes||null,id]);
   if(update.affectedRows!==1)throw fail('SHIFT_CLOSE_CONFLICT',409);
-  await audit(conn,id,req.auth.user.id,'CLOSE',{countedCash:fmtSen(counted),manualExpected:fmtSen(expected),variance:fmtSen(variance),varianceAcknowledged:variance!==0n&&data.varianceAcknowledged,notes:data.notes,posIntegration:'NOT_CONNECTED'});
-  return {countedCash:fmtSen(counted),manualExpected:fmtSen(expected),variance:fmtSen(variance)};
+  await audit(conn,id,req.auth.user.id,'CLOSE',{countedCash:fmtSen(counted),manualExpected:fmtSen(expected),posCashSales:fmtSen(posCash),totalExpected:fmtSen(totalExpected),variance:fmtSen(variance),varianceAcknowledged:variance!==0n&&data.varianceAcknowledged,notes:data.notes,posIntegration:'CASH_CONNECTED'});
+  return {countedCash:fmtSen(counted),manualExpected:fmtSen(expected),posCashSales:fmtSen(posCash),totalExpected:fmtSen(totalExpected),variance:fmtSen(variance)};
  });
- return res.json({message:'SHIFT_CLOSED',...result,expectedBasis:'OPENING_FLOAT_AND_MANUAL_MOVEMENTS_ONLY'});
+ return res.json({message:'SHIFT_CLOSED',...result,expectedBasis:'OPENING_PLUS_MANUAL_AND_POSTED_CASH_SALES'});
 }
 export async function shiftAudit(req,res){
  const id=parseId(req);const shift=await findShift(req.auth.pool,id);assertVisible(req,shift);
@@ -125,7 +130,7 @@ export async function exportShifts(req,res){
  const scope=all(req)?'':' WHERE s.cashier_user_id=?';
  const [rows]=await req.auth.pool.execute(`${selectOne}${scope} ORDER BY s.id DESC LIMIT 1000`,all(req)?[]:[req.auth.user.id]);
  const headers=['ID','Branch','Cashier','Opened At (UTC)','Status','Opening Float (RM)','Manual Expected (RM)','Counted Cash (RM)','Manual Variance (RM)','Closed At (UTC)','Closing Notes','Basis'];
- const data=rows.map(r=>[r.id,r.branch_name,r.cashier_name,r.opened_at,r.status,r.opening_cash,r.manual_expected_cash,r.counted_cash,r.cash_variance,r.closed_at,r.closing_notes,'Opening + manual in - manual out only; POS not connected']);
+ const data=rows.map(r=>[r.id,r.branch_name,r.cashier_name,r.opened_at,r.status,r.opening_cash,r.manual_expected_cash,r.counted_cash,r.cash_variance,r.closed_at,r.closing_notes,'Opening + manual in - manual out + verified POS cash sales']);
  res.set('Cache-Control','no-store').type('text/csv; charset=utf-8').attachment('cash-shifts-report.csv');
  return res.send('\ufeff'+[headers,...data].map(row=>row.map(csvSafe).join(',')).join('\r\n'));
 }

@@ -39,7 +39,7 @@ test('Migration is additive and keeps Service Charge off by default, separate pe
 });
 test('New tenants provision 019, POS quote uses tenant settings and view shows separate line',()=>{
  assert.match(file('backend/src/tenants.js'),/019_tenant_service_charge_settings\.sql/);
- assert.match(file('backend/src/pos-drafts.js'),/readServiceChargeSettings\(req\.auth\.pool\)/);
+ assert.match(file('backend/src/pos-drafts.js'),/readServiceChargeSettings\(conn\)/);
  assert.match(file('backend/src/pos-drafts.js'),/serviceChargeRate:chargePolicy\.rate/);
  assert.match(file('frontend/src/PosTerminal.jsx'),/Service Charge \(\$\{formatPercent\(serviceCharge\.rate\)\}%\)/);
  assert.match(file('frontend/src/App.jsx'),/ServiceChargeSettings/);

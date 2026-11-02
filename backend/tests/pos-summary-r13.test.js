@@ -16,6 +16,6 @@ test('Backend quote derives tax from tenant products and returns server-authorit
  const engine=read('backend/src/pos-bill.js');
  assert.match(api,/SELECT id,jkdm_tax_type,jkdm_tax_rate,jkdm_tax_inclusive FROM products/);
  assert.match(api,/const bill=calculatePosBill\(/);
- assert.match(api,/notPayable:true/);
+ assert.match(api,/cashCheckoutAvailable:!query.discountCode&&!query.voucherCode/);
  assert.ok(!engine.includes('lhdn_tax_rate'),'Do not treat LHDN e-Invoice as JKDM SST configuration');
 });

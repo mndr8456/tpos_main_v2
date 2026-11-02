@@ -31,9 +31,10 @@ test('POS checkout remains protected while Dine In has a dedicated table adapter
  const ui=await src('frontend/src/PosTerminal.jsx');
  const backend=await src('backend/src/pos-drafts.js');
  assert.match(ui,/pos-payment-methods/);
- assert.match(ui,/Checkout locked until integrations are verified/);
+ assert.match(ui,/Card, bank, QR and E-Wallet methods remain unavailable/);
  assert.match(ui,/Select Dine In Table/);
- assert.match(backend,/POS_DINE_IN_SELECT_TABLE_FIRST/);
+ assert.match(backend,/POS_DINE_IN_TABLE_REQUIRED/);
+ assert.match(backend,/POS_TABLE_NOT_AVAILABLE/);
  assert.match(backend,/assignPosTable/);
  assert.match(backend,/POS_TABLE_OCCUPIED/);
  assert.match(backend,/checkoutAvailable:false/);

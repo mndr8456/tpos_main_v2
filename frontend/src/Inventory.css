@@ -1,0 +1,15 @@
+.inv-page .stat-grid{margin-bottom:18px}
+.inv-page .inv-note{display:flex;align-items:flex-start;gap:9px;margin:15px 0 20px;padding:12px 15px;border:1px solid #d5dfec;border-radius:10px;background:#f3f7fd;color:#415a76;font-size:13px;line-height:1.55}
+.inv-page .inv-note svg{flex-shrink:0;margin-top:2px}
+.inv-page .inv-status-text{font-size:16px}
+.inv-page .inv-tools{display:flex;flex-wrap:wrap;gap:10px}
+.inv-page .inv-tools .search{flex:1;min-width:220px}
+.inv-page .inv-tools select{max-width:210px}
+.inv-page .inv-numeric{white-space:nowrap;font-variant-numeric:tabular-nums;text-align:right}
+.inv-page .row-actions{display:flex;gap:6px}
+.inv-modal{max-height:91vh;overflow:auto}
+.inv-modal .field{margin-bottom:16px}
+.inv-modal .dialog-actions .primary{display:inline-flex;gap:8px;align-items:center}
+.inv-ledger-dialog{max-width:1120px;max-height:90vh;overflow:auto}
+.inv-ledger-dialog .table-scroll{max-height:56vh;overflow:auto}
+@media(max-width:750px){.inv-page .inv-tools select{max-width:none;flex:1}.inv-modal .form-two{grid-template-columns:1fr}}

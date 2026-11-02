@@ -96,3 +96,17 @@
 .pos-table-chooser select:disabled{opacity:.65}
 .pos-table-label{font-size:11px;font-weight:500;color:#627895}
 .pos-table-chooser small{line-height:1.5}
+/* Cash-only verified POS checkout and receipt. */
+.pos-payment-methods {display:flex;flex-wrap:wrap;gap:10px}
+.pos-pay-cash {border-color:#90c7a6;background:#f3fbf6}
+.pos-cash-entry {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:end;gap:12px;margin-top:18px}
+.pos-cash-change {padding:12px;background:#f5f8fc;border-radius:9px;display:flex;flex-direction:column;gap:5px}
+.pos-cash-change strong {font-size:1.35rem}
+.pos-checkout-scope-note {font-size:.76rem;color:#5a6d84;margin:12px 0}
+/* POS Cash Checkout R1.3: show stock preflight and server errors inside the modal. */
+.pos-checkout-stock-alert {background:#fff8ea;border:1px solid #e8c785;border-radius:9px;color:#754b13;padding:11px 13px;margin:13px 0 0;font-size:12px;line-height:1.5}
+.pos-checkout-stock-alert>strong {display:block;font-size:12px}
+.pos-checkout-stock-alert ul {margin:7px 0;padding-left:19px;max-height:130px;overflow:auto}
+.pos-checkout-stock-alert li+li {margin-top:5px}
+.pos-checkout-stock-alert p {margin:7px 0 0;font-size:11px}
+.pos-checkout-payment-error {background:#fff1ef;color:#9f3431;border:1px solid #eeb9b4;border-radius:8px;padding:9px 12px;font-size:12px;margin:12px 0 0}

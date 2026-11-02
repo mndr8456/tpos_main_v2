@@ -3,9 +3,9 @@ import {createHash} from 'node:crypto';
 import {z} from 'zod';
 import {inventoryOpening} from './inventory-cost.js';
 const positiveId=z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER);
-const decimal6=z.string().regex(/^(?:0|[1-9]\d{0,11})(?:\.\d{1,6})?$/);
-const decimal8=z.string().regex(/^(?:0|[1-9]\d{0,9})(?:\.\d{1,8})?$/);
-const openingSchema=z.object({branchId:positiveId,productId:positiveId,quantity:decimal6,unitCost:decimal8,reference:z.string().trim().min(4).max(120),requestKey:z.string().uuid()}).strict();
+const decimal2=z.string().regex(/^(?:0|[1-9]\d{0,15})(?:\.\d{1,2})?$/);
+
+const openingSchema=z.object({branchId:positiveId,productId:positiveId,quantity:decimal2,unitCost:decimal2,reference:z.string().trim().min(4).max(120),requestKey:z.string().uuid()}).strict();
 const listSchema=z.object({branchId:positiveId.optional(),productId:positiveId.optional()}).strict();
 const bad=(code,status=400)=>Object.assign(new Error(code),{status});
 const elevated=req=>['OWNER','ADMIN'].includes(req.auth.user.role_code);
@@ -13,6 +13,18 @@ function access(req,branchId){if(!elevated(req)&&!req.auth.user.branchIds.includ
 function authorizedBranches(req,rows){return rows.filter(r=>elevated(req)||req.auth.user.branchIds.includes(String(r.id)));}
 function ensureOpeningAccess(req){if(!elevated(req)||!req.auth.user.permissions.includes('inventory.opening'))throw bad('INVENTORY_OPENING_OWNER_ADMIN_ONLY',403);}
 const mapped=r=>({...r,branch_id:String(r.branch_id),product_id:String(r.product_id),id:r.id===undefined?undefined:String(r.id)});
+// Safe inventory catalog for the management page. Never includes reference cost,
+// average cost or balances outside the existing inventory permission scope.
+export async function inventoryMeta(req,res){
+ const [branchRows,productRows]=await Promise.all([
+  req.auth.pool.execute('SELECT id,code,name FROM branches WHERE is_active=1 ORDER BY name'),
+  req.auth.pool.execute("SELECT id,sku,product_name,min_stock_qty FROM products WHERE product_type='GOODS' AND product_structure='SINGLE' AND track_stock=1 AND status='ACTIVE' AND is_deleted=0 ORDER BY product_name LIMIT 5000")
+ ]);
+ return res.set('Cache-Control','no-store').json({
+  branches:authorizedBranches(req,branchRows[0]).map(b=>({...b,id:String(b.id)})),
+  products:productRows[0].map(p=>({...p,id:String(p.id)}))
+ });
+}
 export async function inventoryBalances(req,res){
  const query=listSchema.parse(req.query);
  if(query.branchId)access(req,query.branchId);
@@ -45,13 +57,15 @@ export async function openInventoryBalance(req,res){
  ensureOpeningAccess(req);
  const data=openingSchema.parse(req.body);access(req,data.branchId);
  const opening=inventoryOpening(data.quantity,data.unitCost);
- const digest=createHash('sha256').update(JSON.stringify({branchId:data.branchId,productId:data.productId,quantity:opening.quantity,unitCost:data.unitCost,reference:data.reference,actor:String(req.auth.user.id)})).digest('hex');
+ const hashForQuantity=quantity=>createHash('sha256').update(JSON.stringify({branchId:data.branchId,productId:data.productId,quantity,unitCost:data.unitCost,reference:data.reference,actor:String(req.auth.user.id)})).digest('hex');
+ const digest=hashForQuantity(opening.quantity);
+ const legacyDigest=hashForQuantity(`${opening.quantity}0000`);
  const conn=await req.auth.pool.getConnection();
  try{
   await conn.beginTransaction();
   const [[prior]]=await conn.execute('SELECT id,request_hash,branch_id,product_id FROM inventory_movements WHERE request_key=?',[data.requestKey]);
   if(prior){
-   if(prior.request_hash!==digest||String(prior.branch_id)!==String(data.branchId)||String(prior.product_id)!==String(data.productId))throw bad('INVENTORY_REQUEST_KEY_REUSED',409);
+   if((prior.request_hash!==digest&&prior.request_hash!==legacyDigest)||String(prior.branch_id)!==String(data.branchId)||String(prior.product_id)!==String(data.productId))throw bad('INVENTORY_REQUEST_KEY_REUSED',409);
    await conn.commit();return res.set('Cache-Control','no-store').json({message:'INVENTORY_OPENING_ALREADY_RECORDED',movementId:String(prior.id),idempotent:true});
   }
   const [[branch]]=await conn.execute('SELECT id FROM branches WHERE id=? AND is_active=1 FOR UPDATE',[data.branchId]);

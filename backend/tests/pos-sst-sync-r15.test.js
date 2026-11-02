@@ -46,7 +46,7 @@ test('POS tenant SST status reveals no registration number to cashier',()=>{
 });
 test('Backend quote reads tenant SST for each request and includes matching-item status',()=>{
  const api=src('backend/src/pos-drafts.js');
- assert.match(api,/const sstSettings=await readSstSettings\(req\.auth\.pool\)/);
+ assert.match(api,/const sstSettings=await readSstSettings\(conn\)/);
  assert.match(api,/summarizePosSst\(sstSettings,data\.lines,taxes\)/);
  assert.match(api,/discount,voucher,bill,sst/);
 });
