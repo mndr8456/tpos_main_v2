@@ -21,6 +21,7 @@ import {getSstSettings,saveSstSettings,listSstAudit} from './sst-settings.js';
 import {getServiceChargeSettings,saveServiceChargeSettings,listServiceChargeAudit} from './service-charge.js';
 import {posBootstrap,listPosDrafts,createPosDraft,getPosDraft,addPosLine,changePosLine,changePosDraftStatus,quotePosDraft,posDraftAudit,assignPosTable} from './pos-drafts.js';
 import {tableMeta,listTables,createTable,updateTable,archiveTable,tableAudit,exportTables,tableTemplate,previewTableImport,importTables} from './restaurant-tables.js';
+import {inventoryBalances,inventoryMovements,openInventoryBalance} from './inventory.js';
 import {listPaymentMethods,savePaymentMethod,uploadPaymentImage,removePaymentImage,readPaymentImage,paymentMethodAudit} from './payment-methods.js';
 import {cashDrawerMeta,listCashDrawer,recordCashDrawerOpen,cashDrawerAudit,exportCashDrawer} from './cash-drawer.js';
 import {voucherOwnerOnly} from './voucher-owner-guard.js';
@@ -71,6 +72,9 @@ export function createApp(){
  app.post('/api/v2/restaurant-tables',authenticate,permitted('restaurant_tables.create'),createTable);
  app.put('/api/v2/restaurant-tables/:id',authenticate,permitted('restaurant_tables.update'),updateTable);
  app.delete('/api/v2/restaurant-tables/:id',authenticate,permitted('restaurant_tables.delete'),archiveTable);
+ app.get('/api/v2/inventory/balances',authenticate,permitted('inventory.view'),inventoryBalances);
+ app.get('/api/v2/inventory/movements',authenticate,permitted('inventory.audit'),inventoryMovements);
+ app.post('/api/v2/inventory/opening',authenticate,permitted('inventory.opening'),openInventoryBalance);
  app.get('/api/v2/pos/bootstrap',authenticate,permitted('pos.view'),posBootstrap);
  app.get('/api/v2/pos/drafts',authenticate,permitted('pos.view'),listPosDrafts);
  app.post('/api/v2/pos/drafts',authenticate,permitted('pos.cart.manage'),createPosDraft);
