@@ -1,4 +1,4 @@
-# TPOS Main V2 — Network and Deployment Guide (R1)
+# TPOS Main V2 — Network and Deployment Guide (R2)
 
 ## What changed
 
@@ -42,17 +42,57 @@ Open `http://192.168.0.156:5174` on the **other device**. Configure Windows Defe
 
 From the remote device open `http://192.168.0.156:5174/api/v2/health`. If the page loads but health fails, check the backend host PC process or Vite proxy first. Sign in again on each host: cookies are host-scoped, not shared between 127.0.0.1 and 192.168.0.156.
 
-## C. Dev Tunnels for temporary development
+## C. Microsoft Dev Tunnels / VS Code Port Forwarding (R2)
 
-Forward **frontend TCP 5174 only** to a private/authenticated HTTPS tunnel. Do not tunnel 5100/3306. Get the **exact** assigned hostname from your tunnel provider. In Windows CMD, before launching Vite, set:
+**Current R2 behavior:** when Microsoft Dev Tunnels connects to Vite over loopback,
+replaces `Host` with `localhost:5174`, and supplies its HTTPS public hostname in
+`X-Forwarded-Host` / `X-Forwarded-Proto`, the Vite `/api/v2` proxy recognizes the
+public origin. On browser writes it also requires **exact** agreement with the
+browser's `Origin`. Rotating tunnel IDs are supported only with that trusted
+forwarded-header pair. This is **not** a wildcard Vite Host allowlist.
+
+1. Start the backend with `npm run dev` on the host PC; keep port **5100** private.
+2. Start the frontend with `npm run dev:tunnel` from `frontend/`.
+3. In VS Code **Ports**, forward TCP **5174** only; preferably keep tunnel
+   visibility **Private / authenticated** and sign in with Microsoft when prompted.
+4. Open the provided `https://<id>-5174.<region>.devtunnels.ms` address.
+5. Verify `<tunnel URL>/api/v2/health` returns JSON. Then attempt **Sign In**.
+   The browser login request must use the same HTTPS tunnel hostname and the path
+   `/api/v2/auth/login`.
+
+No active `.env` change is necessary when the tunnel provider supplies trustworthy
+`X-Forwarded-Host` and `X-Forwarded-Proto` through the local relay.
+
+**Fallback when the provider omits forwarded host headers:** The origin cannot be
+verified automatically and `INVALID_ORIGIN` is intentional. Explicitly pin the
+assigned hostname for this Vite process **in Windows CMD** (not `.env`):
 
 ```cmd
-set "TPOS_DEV_ALLOWED_HOSTS=your-exact-subdomain.devtunnels.ms"
 cd /d D:\www\tpos_main_v2\frontend
+set "TPOS_DEV_ALLOWED_HOSTS=your-exact-hostname.asse.devtunnels.ms"
 npm run dev:tunnel
 ```
 
-Then use the tunnel HTTPS address and test `<tunnel origin>/api/v2/health` before login. The hostname is illustrative; replace it with the actual assigned hostname. If the provider strips Host or X-Forwarded-Proto, configure its host-preservation/proxy settings. Never set `allowedHosts: true` as a workaround: a permissive Vite dev server could expose application source. A dev tunnel is not a production hosting service.
+Replace the example with the precise current hostname printed by your tunnel;
+restart Vite after changing it. This explicit allowlist also supports relays
+that replace `Host` with localhost without providing `X-Forwarded-Host`, as long
+as they preserve the browser's exact HTTPS `Origin`. For providers preserving the
+public `Host`, the same exact setting makes Vite willing to serve that hostname.
+Do not set `allowedHosts: true`, and do not add `.devtunnels.ms` as a Vite
+allowlist entry: unrelated tunnel subdomains are not under your control.
+
+**Safe diagnosis:** If the login page loads but `Sign In` returns
+`INVALID_ORIGIN`, look at the browser Network tab for
+`POST /api/v2/auth/login` (status 403). The Dev Tunnels host/protocol probably
+disagrees with the reverse-proxy header. If `/api/v2/health` is unavailable,
+check frontend/backend processes and the forwarded port first. The tunnel service
+may rewrite host and Origin headers depending on its version and mode. Keep the
+backend bound to loopback and expose neither TCP 5100 nor MySQL TCP 3306.
+
+Dev Tunnels is for temporary development and does not replace HTTPS production
+hosting, domain verification, firewall, authentication, TLS configuration or
+regular security reviews. Never expose an unrestricted Vite source server to
+untrusted public users.
 
 ## D. Real online hosting / production (future, separate from current developer .env)
 
