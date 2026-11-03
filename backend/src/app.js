@@ -22,6 +22,7 @@ import {posBootstrap,listPosDrafts,createPosDraft,getPosDraft,addPosLine,changeP
 import {tableMeta,listTables,createTable,updateTable,archiveTable,tableAudit,exportTables,tableTemplate,previewTableImport,importTables} from './restaurant-tables.js';
 import {inventoryMeta,inventoryBalances,inventoryMovements,openInventoryBalance} from './inventory.js';
 import {cashCheckout,getCashReceipt} from './pos-cash-checkout.js';
+import {staffMeta,staffNextNumber,listStaff,getStaff,getMyStaff,createStaff,updateStaff,updateMyStaff,changeStaffStatus,staffAudit,staffImage,uploadStaffImage,removeStaffImage,staffCsvTemplate,previewStaffImport,confirmStaffImport} from './staff-profiles.js';
 import {listPaymentMethods,savePaymentMethod,uploadPaymentImage,removePaymentImage,readPaymentImage,paymentMethodAudit} from './payment-methods.js';
 import {cashDrawerMeta,listCashDrawer,recordCashDrawerOpen,cashDrawerAudit,exportCashDrawer} from './cash-drawer.js';
 import {voucherOwnerOnly} from './voucher-owner-guard.js';
@@ -36,8 +37,10 @@ export function createApp(){
  app.use('/api/v2/discounts/import',express.json({limit:'2mb'}));
  app.use('/api/v2/vouchers/import',express.json({limit:'2mb'}));
  app.use('/api/v2/restaurant-tables/import',express.json({limit:'2mb'}));
+ app.use('/api/v2/staff-profiles/import',express.json({limit:'1mb'}));
  app.use('/api/v2/products/:id/image',express.json({limit:'3mb'}));
  app.use('/api/v2/payment-methods/:branchId/:code/image',express.json({limit:'2mb'}));
+ app.use('/api/v2/staff-profiles/:id/image',express.json({limit:'2mb'}));
  app.use(express.json({limit:'320kb'}));
  app.use((req,res,next)=>{
   if(!['GET','HEAD','OPTIONS'].includes(req.method)){
@@ -53,6 +56,23 @@ export function createApp(){
  app.post('/api/v2/auth/logout',authenticate,logout);
  app.post('/api/v2/auth/change-password',authenticate,changePassword);
  app.get('/api/v2/dashboard/overview',authenticate,permitted('dashboard.view'),dashboardOverview);
+ app.get('/api/v2/staff-profiles/meta',authenticate,staffMeta);
+ app.get('/api/v2/staff-profiles',authenticate,permitted('staff_profiles.view'),listStaff);
+ app.get('/api/v2/staff-profiles/next-number',authenticate,permitted('staff_profiles.manage'),staffNextNumber);
+ app.get('/api/v2/staff-profiles/me',authenticate,permitted('staff_profiles.self'),getMyStaff);
+ app.patch('/api/v2/staff-profiles/me',authenticate,permitted('staff_profiles.self'),updateMyStaff);
+ app.get('/api/v2/staff-profiles/import/template',authenticate,permitted('staff_profiles.import'),staffCsvTemplate);
+ app.post('/api/v2/staff-profiles/import/preview',authenticate,permitted('staff_profiles.import'),previewStaffImport);
+ app.post('/api/v2/staff-profiles/import/confirm',authenticate,permitted('staff_profiles.import'),confirmStaffImport);
+ app.post('/api/v2/staff-profiles',authenticate,permitted('staff_profiles.manage'),createStaff);
+ app.get('/api/v2/staff-profiles/:id',authenticate,getStaff);
+ app.put('/api/v2/staff-profiles/:id',authenticate,permitted('staff_profiles.manage'),updateStaff);
+ app.patch('/api/v2/staff-profiles/:id/status',authenticate,permitted('staff_profiles.manage'),changeStaffStatus);
+ app.get('/api/v2/staff-profiles/:id/audit',authenticate,permitted('staff_profiles.audit'),staffAudit);
+ app.get('/api/v2/staff-profiles/:id/image',authenticate,staffImage);
+ app.post('/api/v2/staff-profiles/:id/image',authenticate,uploadStaffImage);
+ app.delete('/api/v2/staff-profiles/:id/image',authenticate,removeStaffImage);
+
 
  app.get('/api/v2/service-charge',authenticate,permitted('service_charge.view'),getServiceChargeSettings);
  app.put('/api/v2/service-charge',authenticate,permitted('service_charge.manage'),saveServiceChargeSettings);
