@@ -1,7 +1,7 @@
 import {refreshPage} from './refresh-page.js';
 import {useCallback,useEffect,useMemo,useState} from 'react';
 import {BadgePercent,CheckCircle2,CalendarClock,Layers3,Calculator,Plus,Pencil,Eye,Trash2,History,RefreshCw,Upload,FileDown,Search,X,Save,Check,ChevronLeft,ChevronRight,Info,Printer,Settings2} from 'lucide-react';
-import {request} from './api.js';
+import {request,apiOrigin} from './api.js';
 import {generateDiscountPdf} from './discount-pdf.js';
 import {buildDiscountPrintHtml} from './discount-print.js';
 import {qrSvg,barcodeSvg,svgData} from './discount-codes-render.js';
@@ -132,7 +132,7 @@ function DiscountImport({close,onDone,notify}){
   try{setCsvText(await file.text());}catch{setError('Unable to read CSV file.');}
  }
  async function template(){setBusy(true);setError('');try{
-  const base=import.meta.env.VITE_BACKEND_URL||'http://127.0.0.1:5100';
+  const base=apiOrigin;
   const response=await fetch(`${base}/api/v2/discounts/import/template`,{credentials:'include'});
   if(!response.ok)throw new Error('TEMPLATE_UNAVAILABLE');
   const blob=await response.blob(),url=URL.createObjectURL(blob),a=document.createElement('a');

@@ -6,8 +6,18 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5174 --strictPort",
     "build": "vite build",
-    "preview": "vite preview --host 127.0.0.1 --port 5174 --strictPort"
+    "preview": "vite preview --host 127.0.0.1 --port 5174 --strictPort",
+    "dev:lan": "vite --host 0.0.0.0 --port 5174 --strictPort",
+    "preview:lan": "vite preview --host 0.0.0.0 --port 5174 --strictPort",
+    "dev:tunnel": "vite --host 127.0.0.1 --port 5174 --strictPort"
   },
-  "dependencies": {"lucide-react": "^0.468.0", "react": "^19.1.0", "react-dom": "^19.1.0"},
-  "devDependencies": {"@vitejs/plugin-react": "^5.0.0", "vite": "^7.1.0"}
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.0",
+    "vite": "^7.1.0"
+  }
 }

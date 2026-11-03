@@ -1,8 +1,7 @@
 import express from 'express';
 import helmet from 'helmet';
-import cors from 'cors';
 import { ZodError } from 'zod';
-import { settings } from './config.js';
+import { isAllowedRequestOrigin } from './request-origin.js';
 import { registerTenant } from './tenants.js';
 import { createRegistrationRateLimit } from './registration-rate-limit.js';
 import { login, authenticate, permitted, me, logout, changePassword } from './auth.js';
@@ -33,7 +32,6 @@ export function createApp(){
  const app=express();
  app.disable('x-powered-by');
  app.use(helmet());
- app.use(cors({origin:settings.origin,credentials:true}));
  app.use('/api/v2/products/import',express.json({limit:'24mb'}));
  app.use('/api/v2/discounts/import',express.json({limit:'2mb'}));
  app.use('/api/v2/vouchers/import',express.json({limit:'2mb'}));
@@ -43,8 +41,7 @@ export function createApp(){
  app.use(express.json({limit:'320kb'}));
  app.use((req,res,next)=>{
   if(!['GET','HEAD','OPTIONS'].includes(req.method)){
-   const origin=req.headers.origin;
-   if(origin && origin!==settings.origin) return res.status(403).json({error:'INVALID_ORIGIN'});
+   if(!isAllowedRequestOrigin(req)) return res.status(403).json({error:'INVALID_ORIGIN'});
    if(req.headers['content-type']?.split(';')[0]?.trim()!=='application/json')return res.status(415).json({error:'JSON_REQUIRED'});
   }
   next();

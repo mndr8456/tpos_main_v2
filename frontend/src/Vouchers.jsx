@@ -1,7 +1,7 @@
 import {refreshPage} from './refresh-page.js';
 import {useCallback,useEffect,useMemo,useState} from 'react';
 import {Ticket,Plus,Eye,Pencil,Trash2,Printer,Settings2,History,Search,RefreshCw,X,Save,CheckCircle2,CalendarClock,Barcode,ShieldCheck,Upload,FileDown,ChevronLeft,ChevronRight,Calculator} from 'lucide-react';
-import {request} from './api.js';
+import {request,apiOrigin} from './api.js';
 import {qrSvg,barcodeSvg,svgData} from './voucher-codes.js';
 import {selectUniqueVouchers,generateVoucherPdf} from './voucher-pdf.js';
 const initial={voucherCode:'',voucherName:'',description:'',discountType:'FIXED_AMOUNT',discountValue:'10.00',minimumSpend:'0.00',maximumDiscount:'',startsAt:'',endsAt:'',orderScope:'BOTH',eligibilityType:'ALL',targetIds:[],usageLimit:'',perCustomerLimit:'',status:'INACTIVE'};
@@ -63,7 +63,7 @@ function VoucherImport({onClose,onImported,notify}){
   try{setCsv(await file.text());}catch{setError('Unable to read CSV file.');}
  }
  async function downloadTemplate(){setBusy(true);setError('');try{
-  const base=import.meta.env.VITE_BACKEND_URL||'http://127.0.0.1:5100';
+  const base=apiOrigin;
   const response=await fetch(`${base}/api/v2/vouchers/import/template`,{credentials:'include'});
   if(!response.ok)throw new Error('TEMPLATE_UNAVAILABLE');
   const blob=await response.blob(),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='vouchers-import-template.csv';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);

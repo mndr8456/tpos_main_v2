@@ -580,3 +580,36 @@
 .discount-details.voucher-view-grid span{color:#667c99;}
 .discount-details.voucher-view-grid strong{color:#173e71;}
 @media(max-width:650px){.discount-target-list.voucher-target-list,.discount-details.voucher-view-grid{grid-template-columns:1fr;}}
+
+/* Cash Shift R1.3 — optional opening denomination entry and closing slip */
+.shift-denom-panel{margin:15px 0;border:1px solid #d7e2f0;border-radius:11px;padding:13px 15px;background:#fbfdff}
+.shift-denom-toggle{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:700;color:#204c86;cursor:pointer}
+.shift-denom-toggle input,.shift-physical-ack input{width:17px;height:17px;flex-shrink:0;accent-color:#2264bf}
+.shift-denom-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 13px;margin-top:12px}
+.shift-denom-item{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;color:#43536b}
+.shift-denom-item input{width:90px;max-width:55%;border:1px solid #cbd6e4;border-radius:8px;padding:9px;text-align:right;background:white}
+.shift-denom-total{max-width:220px;margin-top:12px!important}.shift-denom-total input:disabled{background:#eaf1fb;opacity:1;color:#0a3569;font-weight:700}
+.shift-breakdown{border:1px solid #e2e9f1;border-radius:10px;padding:12px 15px;margin:12px 0;background:#fdfefe}
+.shift-breakdown-row{display:flex;align-items:center;justify-content:space-between;gap:12px;line-height:1.65;font-size:13px;color:#223754}
+.shift-breakdown-row strong{white-space:nowrap;font-variant-numeric:tabular-nums}
+.shift-breakdown-subtle{color:#637995}
+.shift-breakdown small{font-size:11px;color:#7788a1;display:block;margin-top:7px}
+.shift-input-hint{font-size:11px;color:#7788a1;margin:-7px 0 10px}
+.shift-physical-ack{display:flex;align-items:flex-start;gap:10px;font-size:12px;color:#3a5479;line-height:1.5;cursor:pointer}
+.shift-receipt-dialog{width:min(440px,100%)}
+.shift-closing-receipt{max-width:72mm;margin:0 auto;padding:3mm 2mm;background:#fff;color:#111;font-family:Arial,sans-serif;font-size:11px;line-height:1.6}
+.shift-receipt-center{display:flex;align-items:center;flex-direction:column;text-align:center;gap:2px}
+.shift-receipt-center strong{font-size:15px}.shift-receipt-center span{font-size:11px}.shift-receipt-center b{margin:7px 0 4px}
+.shift-receipt-rule{border-top:1px dashed #333;margin:9px 0}
+.shift-receipt-headrow{display:flex;justify-content:space-between;font-size:11px;font-weight:700}
+.shift-closing-receipt .shift-breakdown-row{font-size:11px;color:#111}
+.shift-closing-receipt .shift-breakdown-row strong{font-weight:600}
+.shift-closing-receipt footer{display:flex;flex-direction:column;text-align:center;font-size:10px;margin-top:12px}
+@media(max-width:480px){.shift-denom-grid{grid-template-columns:1fr}}
+@media print{
+ @page{size:80mm auto;margin:4mm}
+ body *{visibility:hidden!important}
+ #shift-closing-receipt,#shift-closing-receipt *{visibility:visible!important}
+ #shift-closing-receipt{position:absolute;left:0;top:0;width:72mm!important;max-width:72mm!important;margin:0!important;padding:0!important;background:#fff!important;color:#000!important}
+ .shift-receipt-controls{display:none!important}
+}

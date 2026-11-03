@@ -14,7 +14,10 @@ export const auditDetails=entry=>{
  if(!value)return 'Details unavailable';
  const note=value.reason||value.notes;
  const extra=note?` · Reason: ${String(note)}`:'';
- if(entry.action_type==='OPEN')return `Opening float: ${currency(value.openingCash)}${extra}`;
+ if(entry.action_type==='OPEN'){
+  const notes=value.denominations&&typeof value.denominations==='object'?Object.entries(value.denominations).filter(([,count])=>Number.isInteger(count)&&count>0).map(([denomination,count])=>`RM${denomination} × ${count}`).join(', '):'';
+  return `Opening float: ${currency(value.openingCash)}${notes?` · Notes & Coins: ${notes}`:''}${extra}`;
+ }
  if(entry.action_type==='CASH_IN'||entry.action_type==='CASH_OUT')return `${entry.action_type==='CASH_IN'?'Cash In':'Cash Out'}: ${currency(value.amount)}${extra} · Manual expected: ${currency(value.manualExpected)}`;
  if(entry.action_type==='CLOSE'){
   const variance=Number(value.variance||0),label=variance>0?'Surplus':variance<0?'Shortage':'Balanced';

@@ -1,7 +1,7 @@
 import {refreshPage} from './refresh-page.js';
 import {useCallback,useEffect,useMemo,useState} from 'react';
 import {Wallet,CreditCard,QrCode,Landmark,ShieldCheck,RefreshCw,History,Save,ImagePlus,Trash2,Eye,Pencil,LockKeyhole,CheckCircle2,X,AlertTriangle} from 'lucide-react';
-import {request} from './api.js';
+import {request,apiOrigin} from './api.js';
 import './PaymentMethods.css';
 
 const definitions=[
@@ -31,7 +31,7 @@ function ImageEditor({method,branchId,onUploaded,onError,canManage}){
  const [preview,setPreview]=useState(null),[busy,setBusy]=useState(false),[reload,setReload]=useState(0);
  useEffect(()=>{let url=null,cancel=false;setPreview(null);
   if(!method.hasImage)return;
-  fetch(`${import.meta.env.VITE_BACKEND_URL||'http://127.0.0.1:5100'}/api/v2/payment-methods/${branchId}/${method.methodCode}/image?refresh=${reload}`,{credentials:'include'}).then(r=>{if(!r.ok)throw Error('IMAGE_NOT_FOUND');return r.blob();}).then(blob=>{url=URL.createObjectURL(blob);if(!cancel)setPreview(url);else URL.revokeObjectURL(url);}).catch(()=>{});
+  fetch(`${apiOrigin}/api/v2/payment-methods/${branchId}/${method.methodCode}/image?refresh=${reload}`,{credentials:'include'}).then(r=>{if(!r.ok)throw Error('IMAGE_NOT_FOUND');return r.blob();}).then(blob=>{url=URL.createObjectURL(blob);if(!cancel)setPreview(url);else URL.revokeObjectURL(url);}).catch(()=>{});
   return()=>{cancel=true;if(url)URL.revokeObjectURL(url);};
  },[branchId,method.methodCode,method.hasImage,reload]);
  async function upload(e){const f=e.target.files?.[0];e.target.value='';if(!f)return;

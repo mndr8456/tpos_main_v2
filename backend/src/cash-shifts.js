@@ -1,8 +1,10 @@
 import {z} from 'zod';
 import {parseSen,fmtSen,expectedSen} from './cash-shift-money.js';
+import {openingDenominationTotal,OPENING_DENOMINATIONS} from './cash-shift-denominations.js';
 
 const money=z.string().regex(/^(0|[1-9][0-9]{0,9})(?:\.[0-9]{1,2})?$/,'Money must have at most 2 decimals');
 const positiveId=z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const denominationsSchema=z.object(Object.fromEntries(Object.keys(OPENING_DENOMINATIONS).map(key=>[key,z.number().int().nonnegative().max(100000).optional()]))).strict().optional();
 const has=(req,permission)=>req.auth.user.permissions.includes(permission);
 const role=(req)=>req.auth.user.role_code;
 const admin=(req)=>['OWNER','ADMIN'].includes(role(req));
@@ -56,18 +58,28 @@ export async function shiftDetails(req,res){
  DATE_FORMAT(m.recorded_at,'%Y-%m-%d %H:%i:%s') AS recorded_at,u.full_name AS actor_name
  FROM cash_shift_movements m JOIN users u ON u.id=m.actor_user_id WHERE m.shift_id=? ORDER BY m.id`,[id]);
  const pending=shift.status==='OPEN'?expectedSen(shift.opening_cash,movements):parseSen(String(shift.manual_expected_cash));
- const sales=await cashSalesSen(req.auth.pool,id);return res.json({shift,movements,manualExpected:fmtSen(pending),posCashSales:fmtSen(sales),expectedCash:fmtSen(pending+sales),posIntegration:'CASH_CONNECTED',expectedBasis:'OPENING_PLUS_MANUAL_AND_POSTED_CASH_SALES'});
+ const sales=await cashSalesSen(req.auth.pool,id);
+ const cashIn=movements.filter(m=>m.direction==='CASH_IN').reduce((s,m)=>s+parseSen(String(m.amount)),0n);
+ const cashOut=movements.filter(m=>m.direction==='CASH_OUT').reduce((s,m)=>s+parseSen(String(m.amount)),0n);
+ const [[company]]=await req.auth.pool.execute('SELECT registered_name,trading_name FROM company_profiles WHERE id=1');
+ return res.json({shift,movements,companyName:company?.registered_name||company?.trading_name||'',
+  cashIn:fmtSen(cashIn),cashOut:fmtSen(cashOut),manualExpected:fmtSen(pending),posCashSales:fmtSen(sales),expectedCash:fmtSen(pending+sales),
+  // Only CASH checkout is currently posted. Never invent electronic settlements.
+  ewalletQr:'0.00',debitCard:'0.00',creditCard:'0.00',electronicIntegration:'NOT_CONNECTED',
+  posIntegration:'CASH_CONNECTED',expectedBasis:'OPENING_PLUS_MANUAL_AND_POSTED_CASH_SALES'});
 }
 export async function openShift(req,res){
- const data=z.object({branchId:positiveId,openingCash:money,notes:z.string().trim().max(500).optional().default('')}).strict().parse(req.body);
+ const data=z.object({branchId:positiveId,openingCash:money,notes:z.string().trim().max(500).optional().default(''),denominations:denominationsSchema}).strict().parse(req.body);
  if(!operator(req)||!has(req,'cash_shifts.open'))throw fail('PERMISSION_DENIED',403);
  assertBranch(req,data.branchId);
  const userId=req.auth.user.id,amount=amountText(data.openingCash);
+ const denominationTotal=openingDenominationTotal(data.denominations);
+ if(denominationTotal!==null&&denominationTotal!==parseSen(amount))throw fail('SHIFT_DENOMINATION_TOTAL_MISMATCH');
  try{
   const shiftId=await txn(req.auth.pool,async conn=>{
    const [[branch]]=await conn.execute('SELECT id FROM branches WHERE id=? AND is_active=1',[data.branchId]);if(!branch)throw fail('BRANCH_NOT_ACTIVE');
    const [insert]=await conn.execute('INSERT INTO cash_shifts(branch_id,cashier_user_id,opened_by,opening_cash,opened_at) VALUES(?,?,?,?,UTC_TIMESTAMP(6))',[data.branchId,userId,userId,amount]);
-   await audit(conn,insert.insertId,userId,'OPEN',{branchId:data.branchId,openingCash:amount,notes:data.notes});
+   await audit(conn,insert.insertId,userId,'OPEN',{branchId:data.branchId,openingCash:amount,notes:data.notes,...(data.denominations?{denominations:data.denominations}:{} )});
    return insert.insertId;
   });
   return res.status(201).json({message:'SHIFT_OPENED',shiftId:String(shiftId)});

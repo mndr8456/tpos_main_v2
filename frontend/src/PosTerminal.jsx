@@ -4,7 +4,7 @@ import {
  History,ShieldAlert,FolderOpen,Lock,Package,UtensilsCrossed,
  Store,Layers3,ChevronRight,Table2,Wallet,Tag,Box,ArrowRight,X,CheckCircle2,Printer
 } from 'lucide-react';
-import {request} from './api.js';
+import {request,apiOrigin} from './api.js';
 import {refreshPage} from './refresh-page.js';
 import {findCheckoutStockBlockers} from './pos-checkout-stock.js';
 import {PosCashReceipt} from './PosCashReceipt.jsx';
@@ -83,7 +83,7 @@ export default function PosTerminal({profile,notify}){
  const checkoutStockBlockers=useMemo(()=>findCheckoutStockBlockers(currentLines,bootstrap.stockLevels,branchId),[currentLines,bootstrap.stockLevels,branchId]);
  const totalItems=currentLines.reduce((n,line)=>n+Number(line.quantity),0);
  const currentBranch=bootstrap.branches.find(b=>String(b.id)===branchId);
- const imageBase=import.meta.env.VITE_BACKEND_URL||'http://127.0.0.1:5100';
+ const imageBase=apiOrigin;
  const selectedBusiness=DISPLAY_NAMES[businessMode.businessType]||String(profile?.business?.type||'Business');
  async function mutate(fn){setBusy(true);try{const data=await fn();setCurrent(data);setPreview(null);await load();return true;}catch(e){notify(readableError(e.message),true);return false;}finally{setBusy(false);}}
  // Opening POS only reads the catalog and saved HELD orders.

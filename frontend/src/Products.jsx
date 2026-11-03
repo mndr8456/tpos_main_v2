@@ -1,7 +1,7 @@
 import {refreshPage} from './refresh-page.js';
 import { useCallback,useEffect,useMemo,useState } from 'react';
 import { Package,CheckCircle2,Ban,Barcode,Search,RefreshCw,Plus,Pencil,Trash2,Download,Upload,Printer,History,X,Save,Check as CheckIcon,Eye,FileDown,Tags,Scale,Image as ImageIcon,ChevronLeft,ChevronRight } from 'lucide-react';
-import { request } from './api.js';
+import { request,apiOrigin } from './api.js';
 const yes=v=>v===true||v===1||v==='1';
 const fixed2=value=>value===null||value===undefined||value===''?'0.00':Number(value).toFixed(2);
 const IMAGE_MAX_BYTES=2*1024*1024;
@@ -31,7 +31,7 @@ function ProductDialog({original,meta,busy,onClose,onSave,showCost,notify,canEdi
   if(imageFile){revoke=URL.createObjectURL(imageFile);setImagePreview(revoke);}
   else if(original?.product_image_url?.startsWith('tpos-image:')){
    const controller=new AbortController();
-   const endpoint=(import.meta.env.VITE_BACKEND_URL||'http://127.0.0.1:5100')+`/api/v2/products/${original.id}/image`;
+   const endpoint=(apiOrigin)+`/api/v2/products/${original.id}/image`;
    fetch(endpoint,{credentials:'include',signal:controller.signal}).then(r=>{if(!r.ok)throw new Error('IMAGE_UNAVAILABLE');return r.blob();}).then(b=>{if(active){revoke=URL.createObjectURL(b);setImagePreview(revoke);}}).catch(()=>{if(active)setImagePreview('');});
    return ()=>{active=false;controller.abort();if(revoke)URL.revokeObjectURL(revoke);};
   }else setImagePreview(original?.product_image_url?.startsWith('https://')?original.product_image_url:'');
@@ -110,7 +110,7 @@ function ProductViewDialog({product,onClose,showCost}){
   if(!source.startsWith('tpos-image:')){setImageSrc('');return;}
   let active=true;let objectUrl='';
   const controller=new AbortController();
-  const endpoint=(import.meta.env.VITE_BACKEND_URL||'http://127.0.0.1:5100')+`/api/v2/products/${product.id}/image`;
+  const endpoint=(apiOrigin)+`/api/v2/products/${product.id}/image`;
   fetch(endpoint,{credentials:'include',signal:controller.signal}).then(response=>{if(!response.ok)throw new Error('IMAGE_UNAVAILABLE');return response.blob();}).then(blob=>{if(active){objectUrl=URL.createObjectURL(blob);setImageSrc(objectUrl);}}).catch(()=>{if(active)setImageSrc('');});
   return ()=>{active=false;controller.abort();if(objectUrl)URL.revokeObjectURL(objectUrl);};
  },[product.id,product.product_image_url]);
@@ -231,7 +231,7 @@ function ProductImport({notify,onClose,onImported}){const [csv,setCsv]=useState(
  async function choose(e){const f=e.target.files?.[0];if(!f)return;if(f.size>CSV_MAX_BYTES){notify('CSV_TOO_LARGE',true);return;}setCsv(await f.text());setName(f.name);setPreview(null);setPage(0);}
  async function previewFile(){setBusy(true);try{setPreview(await request('/products/import/preview',{method:'POST',body:{csv}}));}catch(e){notify(e.message,true);}finally{setBusy(false);}}
  async function save(){setBusy(true);try{const r=await request('/products/import',{method:'POST',body:{csv}});notify(`${r.count} products imported.`);await onImported();onClose();}catch(e){notify(e.message,true);setPreview(null);}finally{setBusy(false);}}
- async function template(){try{const r=await fetch((import.meta.env.VITE_BACKEND_URL||'http://127.0.0.1:5100')+'/api/v2/products/import/template',{credentials:'include'});if(!r.ok)throw new Error('TEMPLATE_UNAVAILABLE');download('products-import-template.csv',await r.text());}catch(e){notify(e.message,true);}}
+ async function template(){try{const r=await fetch((apiOrigin)+'/api/v2/products/import/template',{credentials:'include'});if(!r.ok)throw new Error('TEMPLATE_UNAVAILABLE');download('products-import-template.csv',await r.text());}catch(e){notify(e.message,true);}}
  return <div className="overlay"><div className="dialog wide"><div className="dialog-head"><div><h2>Import Products</h2><p className="muted">Download template → Preview → Confirm. Up to 5,000 rows (8 MiB). Category names and optional suppliers must exist.</p></div><IconAction icon={X} label="Close" onClick={onClose} disabled={busy}/></div><div className="product-import-tools"><IconAction icon={FileDown} label="Download CSV Template" onClick={template}/><label className="import-file"><Upload size={19}/><span>{name||'Choose CSV File'}</span><input type="file" accept=".csv,text/csv" onChange={choose} disabled={busy}/></label><IconAction icon={Eye} label="Preview Import" onClick={previewFile} disabled={!csv||busy}/></div>{preview&&<><p className={preview.valid?'import-ok':'import-error'}>{preview.valid?`${preview.count} rows ready to import.`:'Review the errors before importing.'}</p><div className="table-scroll product-preview"><table><thead><tr><th>Line</th><th>SKU</th><th>Product</th><th>Category</th><th>Price</th><th>Result</th></tr></thead><tbody>{preview.rows.slice(page*100,(page+1)*100).map(x=><tr key={x.line}><td>{x.line}</td><td>{x.sku||'Auto'}</td><td>{x.productName||'—'}</td><td>{x.categoryName||'—'}</td><td>{x.sellingPrice?fixed2(x.sellingPrice):'—'}</td><td className={x.error?'import-error':'import-ok'}>{x.error||'VALID'}</td></tr>)}</tbody></table></div><div className="product-preview-pager"><span>Rows {page*100+1}–{Math.min((page+1)*100,preview.count)} of {preview.count} (page {page+1}/{Math.ceil(preview.count/100)})</span><IconAction icon={ChevronLeft} label="Previous Preview Page" onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={page===0}/><IconAction icon={ChevronRight} label="Next Preview Page" onClick={()=>setPage(p=>Math.min(Math.ceil(preview.count/100)-1,p+1))} disabled={(page+1)*100>=preview.count}/></div><div className="dialog-actions"><IconAction icon={X} label="Cancel" onClick={onClose}/><IconAction icon={CheckIcon} label="Confirm Import" primary onClick={save} disabled={!preview.valid||!preview.count||busy}/></div></>}</div></div>;
 }
 export default function Products({profile,notify}){
