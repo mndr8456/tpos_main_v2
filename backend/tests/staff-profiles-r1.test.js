@@ -54,7 +54,8 @@ test('Print Blank Staff Form and Print Form Staff have exact same eight sections
  const actual=staffFormHtml({staff_no:'SAT-0001',full_name:'Test Staff',ic_no:'010203123456',bank_account_no:'1234567890'}, {businessName:'Example Sdn Bhd'});
  for(const name of sections){assert.ok(blank.includes(name.replaceAll('&','&amp;')),`blank missing ${name}`);assert.ok(actual.includes(name.replaceAll('&','&amp;')),`filled missing ${name}`);}
  assert.match(blank,/@page\{size:A4 portrait/);
- assert.match(blank,/BLANK STAFF FORM/);
+ assert.match(blank,/>STAFF FORM<\/h1>/);
+ assert.doesNotMatch(blank,/BLANK STAFF FORM/);
  assert.match(actual,/STAFF PROFILE FORM/);
  assert.doesNotMatch(blank,/010203123456|1234567890|SAT-0001|Test Staff/);
  assert.match(actual,/010203123456/);

@@ -22,6 +22,7 @@ import {posBootstrap,listPosDrafts,createPosDraft,getPosDraft,addPosLine,changeP
 import {tableMeta,listTables,createTable,updateTable,archiveTable,tableAudit,exportTables,tableTemplate,previewTableImport,importTables} from './restaurant-tables.js';
 import {inventoryMeta,inventoryBalances,inventoryMovements,openInventoryBalance} from './inventory.js';
 import {cashCheckout,getCashReceipt} from './pos-cash-checkout.js';
+import {attendanceMeta,attendanceList,attendanceDetails,createAttendance,updateAttendance,approveAttendance,statusAttendance,attendanceAudit,attendanceTemplate,previewAttendanceImport,confirmAttendanceImport} from './attendances.js';
 import {staffMeta,staffNextNumber,listStaff,getStaff,getMyStaff,createStaff,updateStaff,updateMyStaff,changeStaffStatus,staffAudit,staffImage,uploadStaffImage,removeStaffImage,staffCsvTemplate,previewStaffImport,confirmStaffImport} from './staff-profiles.js';
 import {listPaymentMethods,savePaymentMethod,uploadPaymentImage,removePaymentImage,readPaymentImage,paymentMethodAudit} from './payment-methods.js';
 import {cashDrawerMeta,listCashDrawer,recordCashDrawerOpen,cashDrawerAudit,exportCashDrawer} from './cash-drawer.js';
@@ -38,6 +39,7 @@ export function createApp(){
  app.use('/api/v2/vouchers/import',express.json({limit:'2mb'}));
  app.use('/api/v2/restaurant-tables/import',express.json({limit:'2mb'}));
  app.use('/api/v2/staff-profiles/import',express.json({limit:'1mb'}));
+ app.use('/api/v2/attendances/import',express.json({limit:'2mb'}));
  app.use('/api/v2/products/:id/image',express.json({limit:'3mb'}));
  app.use('/api/v2/payment-methods/:branchId/:code/image',express.json({limit:'2mb'}));
  app.use('/api/v2/staff-profiles/:id/image',express.json({limit:'2mb'}));
@@ -56,6 +58,17 @@ export function createApp(){
  app.post('/api/v2/auth/logout',authenticate,logout);
  app.post('/api/v2/auth/change-password',authenticate,changePassword);
  app.get('/api/v2/dashboard/overview',authenticate,permitted('dashboard.view'),dashboardOverview);
+ app.get('/api/v2/attendances/meta',authenticate,permitted('attendances.view'),attendanceMeta);
+ app.get('/api/v2/attendances',authenticate,permitted('attendances.view'),attendanceList);
+ app.get('/api/v2/attendances/import/template',authenticate,permitted('attendances.import'),attendanceTemplate);
+ app.post('/api/v2/attendances/import/preview',authenticate,permitted('attendances.import'),previewAttendanceImport);
+ app.post('/api/v2/attendances/import/confirm',authenticate,permitted('attendances.import'),confirmAttendanceImport);
+ app.get('/api/v2/attendances/:id',authenticate,permitted('attendances.view'),attendanceDetails);
+ app.get('/api/v2/attendances/:id/audit',authenticate,permitted('attendances.audit'),attendanceAudit);
+ app.post('/api/v2/attendances',authenticate,permitted('attendances.manage'),createAttendance);
+ app.put('/api/v2/attendances/:id',authenticate,permitted('attendances.manage'),updateAttendance);
+ app.patch('/api/v2/attendances/:id/approval',authenticate,permitted('attendances.approve'),approveAttendance);
+ app.patch('/api/v2/attendances/:id/status',authenticate,permitted('attendances.manage'),statusAttendance);
  app.get('/api/v2/staff-profiles/meta',authenticate,staffMeta);
  app.get('/api/v2/staff-profiles',authenticate,permitted('staff_profiles.view'),listStaff);
  app.get('/api/v2/staff-profiles/next-number',authenticate,permitted('staff_profiles.manage'),staffNextNumber);

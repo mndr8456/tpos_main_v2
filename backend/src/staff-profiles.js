@@ -1,5 +1,6 @@
 import {z} from 'zod';
 import {checkPaymentImage} from './payment-method-security.js';
+import {normalizeStaffImportDates,describeStaffImportError} from './staff-import-dates.js';
 
 const fail=(code,status=400)=>Object.assign(new Error(code),{status});
 const id=z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER);
@@ -28,11 +29,11 @@ const profileBody=z.object({
 const selfBody=profileBody.pick(Object.fromEntries(selfFields.map(x=>[x,true]))).partial().strict();
 const listFields=baseFields.filter(x=>x!=='ic_no').join(',sp.');
 const selectStaff=`SELECT sp.id,sp.user_id,sp.staff_no,sp.ic_no,sp.${listFields},sp.overtime_rate_per_hour,
- sp.created_at,sp.updated_at,sp.image_mime IS NOT NULL AS has_image,
+ sp.created_at,sp.updated_at,CASE WHEN sp.image_mime IN ('image/png','image/jpeg','image/webp') AND OCTET_LENGTH(sp.image_data) > 0 THEN 1 ELSE 0 END AS has_image,
  u.full_name,u.email,u.phone,u.status AS user_status,r.code AS role_code
  FROM staff_profiles sp JOIN users u ON u.id=sp.user_id
  JOIN user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id`;
-const stringifyIds=row=>({...row,id:String(row.id),user_id:String(row.user_id),has_image:Boolean(row.has_image)});
+const stringifyIds=row=>({...row,id:String(row.id),user_id:String(row.user_id),has_image:row.has_image===true||row.has_image===1||row.has_image==='1'||(Buffer.isBuffer(row.has_image)&&row.has_image.length===1&&row.has_image[0]===1)});
 export function safeStaff(row,full=false){
  const result=stringifyIds(row);
  if(!full)for(const key of sensitive)result[key]=row[key]?'************':null;
@@ -75,7 +76,7 @@ export async function staffMeta(req,res){
 }
 export async function staffNextNumber(req,res){checkAccess(req,'manage');const query=z.object({prefix:z.string().regex(/^[A-Za-z0-9]{2,12}-$/)}).strict().parse(req.query);const value=await nextStaffNo(req.auth.pool,query.prefix.toUpperCase(),false);res.set('Cache-Control','no-store').json({staffNo:value,nextNumber:value.slice(query.prefix.length)});}
 export async function listStaff(req,res){checkAccess(req,'view');const query=z.object({search:z.string().max(160).optional().default(''),department:z.string().max(150).optional(),employmentType:z.enum(['Full Time','Part Time','Intern']).optional(),employmentStatus:z.enum(['Active','Probation','Suspended','Resigned','Terminated']).optional(),status:z.enum(['active','inactive']).optional(),limit:z.coerce.number().int().min(1).max(500).optional().default(100)}).strict().parse(req.query);
- const [rows]=await req.auth.pool.execute(`${selectStaff} WHERE 1=1 ORDER BY u.full_name,sp.id LIMIT 1000`);
+ const [rows]=await req.auth.pool.execute(`${selectStaff} WHERE 1=1 ORDER BY SUBSTRING_INDEX(sp.staff_no, '-', 1), CAST(SUBSTRING_INDEX(sp.staff_no, '-', -1) AS UNSIGNED), sp.staff_no, sp.id LIMIT 1000`);
  const q=query.search.toLowerCase();const filtered=rows.filter(r=>(!q||[r.full_name,r.staff_no,r.email,r.department,r.job_title].some(v=>String(v||'').toLowerCase().includes(q)))&&(!query.department||r.department===query.department)&&(!query.employmentType||r.employment_type===query.employmentType)&&(!query.employmentStatus||r.employment_status===query.employmentStatus)&&(!query.status||r.status===query.status));
  const safe=filtered.slice(0,query.limit).map(r=>safeStaff(r,elevated(req)||String(r.user_id)===String(req.auth.user.id)));
  const salary=elevated(req)?filtered.reduce((n,r)=>n+Number(r.basic_salary||0),0).toFixed(2):null;
@@ -116,11 +117,12 @@ export async function staffCsvTemplate(req,res){checkAccess(req,'manage');res.ty
 async function validateImport(req,csv){const rows=parseStaffCsv(csv),errors=[];const prepared=[];const emails=new Set(),numbers=new Set();for(let i=0;i<rows.length;i++){const raw=rows[i],row=i+2;try{
  if(emails.has(raw.user_email.toLowerCase())||(raw.staff_no&&numbers.has(raw.staff_no)))throw fail('STAFF_DUPLICATE_IN_CSV');if(raw.staff_no&&!/^[A-Za-z0-9]{2,12}-\d{1,8}$/.test(raw.staff_no))throw fail('STAFF_NO_INVALID');emails.add(raw.user_email.toLowerCase());numbers.add(raw.staff_no);
  const [[user]]=await req.auth.pool.execute('SELECT u.id FROM users u LEFT JOIN staff_profiles sp ON sp.user_id=u.id WHERE u.email=? AND u.status=\'ACTIVE\' AND sp.id IS NULL LIMIT 1',[raw.user_email.toLowerCase()]);if(!user)throw fail('USER_NOT_AVAILABLE');
- const normalized={};for(const key of baseFields)normalized[key]=raw[key]||undefined;
+ const cleaned=normalizeStaffImportDates(raw);
+ const normalized={};for(const key of baseFields)normalized[key]=cleaned[key]||undefined;
  if(raw.ic_no)normalized.ic_no=raw.ic_no;
  const parsed=profileBody.extend({user_id:id}).parse({user_id:user.id,staff_no:raw.staff_no||undefined,...normalized});
  prepared.push(parsed);
- }catch(e){errors.push({row,error:e.message||'INVALID_ROW'});}}
+ }catch(e){errors.push({row,error:describeStaffImportError(e)});}}
  return {rows:prepared,errors,count:rows.length};}
 export async function previewStaffImport(req,res){checkAccess(req,'manage');const {csv}=z.object({csv:z.string()}).strict().parse(req.body);const result=await validateImport(req,csv);res.set('Cache-Control','no-store').json({count:result.count,errors:result.errors,validRows:result.rows.length});}
 export async function confirmStaffImport(req,res){checkAccess(req,'manage');const {csv}=z.object({csv:z.string()}).strict().parse(req.body);const result=await validateImport(req,csv);if(result.errors.length)throw fail('STAFF_IMPORT_PREVIEW_HAS_ERRORS',409);
