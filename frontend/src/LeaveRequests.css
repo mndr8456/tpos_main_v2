@@ -1,0 +1,30 @@
+/* HR Leave Requests R1: same input and modal primitives as approved Attendances and Leave Balances. */
+.lr-page .lr-stats{grid-template-columns:repeat(5,minmax(0,1fr));margin-bottom:18px;gap:12px}
+.lr-page .lr-stats .stat{min-height:114px;display:flex;flex-direction:column;gap:8px}
+.lr-page .lr-stats .stat b{font-size:28px}.lr-page .lr-stats .stat small{font-size:11px;color:#64748b}
+.lr-filter{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:end;padding:16px}
+.lr-filter .lr-search{grid-column:span 2;display:flex;align-items:center;gap:10px;padding:0 12px;height:44px}
+.lr-filter .lr-search input{width:100%;border:0;outline:0;background:transparent;box-shadow:none;padding:0;font-size:13px}
+.lr-filter .lr-search,.lr-filter select,.lr-filter .field input{height:44px;box-sizing:border-box;border:1px solid #cbd6e4;border-radius:10px;background:#fff;color:#173451;font-size:13px;min-width:0;width:100%}
+.lr-filter select{padding:8px 12px;cursor:pointer}.lr-filter .field span{font-size:11px}.lr-filter .field input{padding:7px 12px}
+.lr-filter :is(input,select):focus,.lr-search:focus-within{outline:0;border-color:#2d6acc;box-shadow:0 0 0 3px #1e60c624}
+.lr-page .lr-table{min-width:1290px}.lr-page .lr-table th{white-space:nowrap}.lr-page .lr-table td{font-size:13px;white-space:nowrap;vertical-align:middle}
+.lr-page .lr-table td small{display:block;font-size:11px;color:#64748b;margin-top:5px}.lr-page .lr-table .lr-number{text-align:right;font-variant-numeric:tabular-nums}
+.lr-page .lr-table .row-actions{display:flex;gap:3px;align-items:center;white-space:nowrap}.lr-page .lr-table .action-icon{width:31px;height:31px;padding:6px}
+.lr-status{display:inline-block;border-radius:20px;padding:5px 10px;font-weight:700;font-size:11px;background:#eaf1f8;color:#254d72}
+.lr-approved{background:#e1f6e8;color:#24683c}.lr-rejected{background:#fae4e8;color:#a52a40}.lr-cancelled{background:#edf0f4;color:#64748b}.lr-pending{background:#fff2d4;color:#805a05}
+.lr-dialog{width:min(950px,calc(100vw - 32px));max-width:950px;max-height:92vh;overflow:auto;box-sizing:border-box}
+.lr-section{padding:16px;border:1px solid #d7e1ed;border-radius:12px;margin:13px 0;background:#fff}
+.lr-section h3{font-size:15px;margin:0 0 14px;color:#173451;border-bottom:1px solid #d9e3ee;padding-bottom:10px}
+.lr-section .form-two{gap:14px}.lr-section .field{min-width:0}.lr-section .field input,.lr-section .field select,.lr-section .field textarea{box-sizing:border-box;width:100%;min-height:42px;border:1px solid #cbd6e4;border-radius:9px;padding:10px 12px;background:#fff;color:#173451;font:inherit;font-size:13px;outline:0}
+/* Keep Request Details vertical rhythm consistent with the Leave Period form grid. */
+.lr-request-details > .field + .form-two,.lr-request-details > .form-two + .field{margin-top:14px}
+.lr-section .field textarea{resize:vertical;min-height:90px}.lr-section .field :is(input,select,textarea):focus{border-color:#2d6acc;box-shadow:0 0 0 3px #1e60c624}.lr-section .field :is(input,select,textarea):disabled{background:#edf1f6;color:#687d93}
+.lr-help{font-size:12px;color:#64748b;line-height:1.5;margin:11px 0 0}.lr-warning{font-size:12px;color:#a52a40;margin:11px 0}
+.lr-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}.lr-metrics>div{border-radius:10px;padding:12px;background:#f1f5fb;display:flex;flex-direction:column;gap:5px}.lr-metrics span{font-size:12px;color:#4b6783}.lr-metrics b{font-size:23px;color:#173451}
+.lr-choose{display:flex;align-items:end;padding-bottom:2px}.lr-choose .outline{display:flex;gap:7px;align-items:center;min-height:42px}.lr-file{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e5ecf4;gap:12px;padding:9px 0;font-size:12px}.lr-file label{display:flex;gap:8px;align-items:center}
+.lr-view-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:18px 0}.lr-view-grid>div{border:1px solid #dfe8f3;border-radius:10px;padding:12px;min-height:66px;display:flex;flex-direction:column;gap:8px}.lr-view-grid span{font-size:12px;color:#64748b}.lr-view-grid b{font-size:13px;overflow-wrap:anywhere}
+.lr-approval-blocker{border:1px solid #f3c78b;border-radius:10px;background:#fff9ec;padding:12px 14px;margin:12px 0;color:#794a0c;font-size:13px;line-height:1.5}.lr-approval-blocker strong{display:block;margin-bottom:4px}.lr-approval-blocker p{margin:0 0 6px}.lr-approval-blocker small{display:block;color:#805c26;line-height:1.5}
+.lr-attachment{display:flex;gap:7px;align-items:center;margin:9px 0;color:#1d5cb0;font-size:13px}.lr-dialog .dialog-actions{position:sticky;bottom:0;z-index:3;background:#fff;padding-top:12px;display:flex;gap:8px;flex-wrap:wrap}.lr-dialog .dialog-actions button{display:inline-flex;align-items:center;gap:7px}
+@media(max-width:1060px){.lr-page .lr-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.lr-filter{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.lr-page .lr-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.lr-filter{grid-template-columns:1fr}.lr-filter .lr-search{grid-column:span 1}.lr-dialog .form-two,.lr-view-grid,.lr-metrics{grid-template-columns:1fr}}

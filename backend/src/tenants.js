@@ -68,6 +68,8 @@ export async function registerTenant(request,response) {
   await executeSchema(dbName,'027_tenant_attendance_clock.sql');
   await executeSchema(dbName,'028_tenant_hr_leave_types.sql');
   await executeSchema(dbName,'029_tenant_hr_leave_balances.sql');
+  await executeSchema(dbName,'030_tenant_hr_leave_requests.sql');
+  await executeSchema(dbName,'031_tenant_hr_leave_requests_no_import.sql');
   const userId=await seedProfile({id},data,passwordHash);
   await cp.execute('INSERT INTO login_directory(email,tenant_id,tenant_user_id) VALUES(?,?,?)',[data.ownerEmail,id,userId]);
   await cp.execute(`UPDATE tenants SET status='ACTIVE',activated_at=UTC_TIMESTAMP(6) WHERE id=?`,[id]);

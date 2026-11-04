@@ -12,6 +12,7 @@ const year=z.coerce.number().int().min(2000).max(2100);
 const statusSchema=z.object({status:z.enum(['active','inactive']),reason:z.string().trim().min(4).max(1000)}).strict();
 const fields=['staff_profile_id','leave_type_id','balance_year','entitlement_days','carried_forward_days','adjustment_days','used_days','pending_days','expired_days','adjustment_notes','status'];
 const moneyFields=['entitlement_days','carried_forward_days','adjustment_days','used_days','pending_days','expired_days'];
+const dayValuesChanged=(before,input)=>['used_days','pending_days'].some(k=>Number(before[k])!==Number(input[k]));
 const select=`b.id,b.staff_profile_id,b.leave_type_id,b.balance_year,b.entitlement_days,b.carried_forward_days,b.adjustment_days,b.used_days,b.pending_days,b.expired_days,b.remaining_days,b.adjustment_notes,b.status,DATE_FORMAT(b.last_recalculated_at,'%Y-%m-%d %H:%i:%s') AS last_recalculated_at,DATE_FORMAT(b.created_at,'%Y-%m-%d %H:%i:%s') AS created_at,DATE_FORMAT(b.updated_at,'%Y-%m-%d %H:%i:%s') AS updated_at,sp.staff_no,sp.department,sp.job_title,u.full_name,lt.leave_code,lt.leave_name,lt.sort_order`;
 const joins=`FROM hr_leave_balances b JOIN staff_profiles sp ON sp.id=b.staff_profile_id JOIN users u ON u.id=sp.user_id JOIN hr_leave_types lt ON lt.id=b.leave_type_id`;
 const publicRow=r=>({...r,id:String(r.id),staff_profile_id:String(r.staff_profile_id),leave_type_id:String(r.leave_type_id)});
@@ -59,6 +60,12 @@ export async function balanceUpdate(req,res){requireRole(req,'manage');const inp
  await transaction(req.auth.pool,async c=>{const before=await getBalance(c,balanceId,true);
   if(Number(before.staff_profile_id)!==input.staff_profile_id||Number(before.leave_type_id)!==input.leave_type_id||Number(before.balance_year)!==input.balance_year)fail('BALANCE_IDENTITY_IMMUTABLE',409);
   await checkReferences(c,input);
+  // Imported opening values remain editable until their first Leave Request posting.
+  // Afterwards direct Used/Pending edits would corrupt the reconciled append-only ledger.
+  if(dayValuesChanged(before,input)){
+   const [[opened]]=await c.execute('SELECT balance_id FROM hr_leave_balance_openings WHERE balance_id=?',[balanceId]);
+   if(opened)fail('LEAVE_REQUEST_POSTINGS_PROTECT_USED_PENDING',409);
+  }
   const changed=moneyFields.some(k=>String(before[k])!==input[k])||before.status!==input.status||String(before.adjustment_notes||'')!==input.adjustment_notes;
   if(!changed)return;
   if(!input.adjustment_notes||input.adjustment_notes.length<4)fail('ADJUSTMENT_REASON_REQUIRED',422);

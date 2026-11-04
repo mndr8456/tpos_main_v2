@@ -26,6 +26,7 @@ import {attendanceMeta,attendanceList,attendanceDetails,createAttendance,updateA
 import {attendanceClockToday,attendanceClockHistory,attendanceClockPunch,attendanceClockAdminMeta,addOfficeNetwork,disableOfficeNetwork,grantRemoteClock,revokeRemoteClock} from './attendance-clock.js';
 import {staffMeta,staffNextNumber,listStaff,getStaff,getMyStaff,createStaff,updateStaff,updateMyStaff,changeStaffStatus,staffAudit,staffImage,uploadStaffImage,removeStaffImage,staffCsvTemplate,previewStaffImport,confirmStaffImport} from './staff-profiles.js';
 import {balanceMeta,balanceList,balanceDetail,balanceCreate,balanceUpdate,balanceStatus,balanceAudit,balanceGenerate,balanceTemplate,balanceImportPreview,balanceImportConfirm} from './leave-balances.js';
+import {requestMeta,requestList,requestDetail,requestCreate,requestEdit,requestReview,requestCancel,requestAudit,requestAttachment,requestRecalculate} from './leave-requests.js';
 import {leaveTypeMeta,leaveTypeList,leaveTypeDetail,leaveTypeCreate,leaveTypeUpdate,leaveTypeStatus,leaveTypeAudit,leaveTypeTemplate,leaveTypeImportPreview,leaveTypeImportConfirm} from './leave-types.js';
 import {listPaymentMethods,savePaymentMethod,uploadPaymentImage,removePaymentImage,readPaymentImage,paymentMethodAudit} from './payment-methods.js';
 import {cashDrawerMeta,listCashDrawer,recordCashDrawerOpen,cashDrawerAudit,exportCashDrawer} from './cash-drawer.js';
@@ -45,6 +46,14 @@ export function createApp(){
  app.use('/api/v2/attendances/import',express.json({limit:'2mb'}));
  app.use('/api/v2/leave-types/import',express.json({limit:'2mb'}));
  app.use('/api/v2/leave-balances/import',express.json({limit:'3mb'}));
+ // Authenticate and validate origin BEFORE parsing potentially large MC attachments.
+ app.use('/api/v2/leave-requests',(req,res,next)=>{
+  if(!['GET','HEAD','OPTIONS'].includes(req.method)){
+   if(!isAllowedRequestOrigin(req))return res.status(403).json({error:'INVALID_ORIGIN'});
+   if(req.headers['content-type']?.split(';')[0]?.trim()!=='application/json')return res.status(415).json({error:'JSON_REQUIRED'});
+  }
+  next();
+ },authenticate,(req,res,next)=>express.json({limit:'72mb'})(req,res,next));
  app.use('/api/v2/products/:id/image',express.json({limit:'3mb'}));
  app.use('/api/v2/payment-methods/:branchId/:code/image',express.json({limit:'2mb'}));
  app.use('/api/v2/staff-profiles/:id/image',express.json({limit:'2mb'}));
@@ -71,6 +80,16 @@ export function createApp(){
  app.patch('/api/v2/attendance-clock-admin/networks/:id/disable',authenticate,permitted('attendance_clock.manage'),disableOfficeNetwork);
  app.post('/api/v2/attendance-clock-admin/remote-grants',authenticate,permitted('attendance_clock.manage'),grantRemoteClock);
  app.patch('/api/v2/attendance-clock-admin/remote-grants/:id/revoke',authenticate,permitted('attendance_clock.manage'),revokeRemoteClock);
+ app.get('/api/v2/leave-requests/meta',requestMeta);
+ app.get('/api/v2/leave-requests',requestList);
+ app.post('/api/v2/leave-requests/balances/:balanceId/recalculate',permitted('leave_requests.recalculate'),requestRecalculate);
+ app.get('/api/v2/leave-requests/:id',requestDetail);
+ app.get('/api/v2/leave-requests/:id/audit',requestAudit);
+ app.get('/api/v2/leave-requests/:id/attachments/:attachmentId',requestAttachment);
+ app.post('/api/v2/leave-requests',requestCreate);
+ app.put('/api/v2/leave-requests/:id',requestEdit);
+ app.post('/api/v2/leave-requests/:id/review',permitted('leave_requests.approve'),requestReview);
+ app.post('/api/v2/leave-requests/:id/cancel',requestCancel);
  app.get('/api/v2/leave-balances/meta',authenticate,permitted('leave_balances.view'),balanceMeta);
  app.get('/api/v2/leave-balances',authenticate,permitted('leave_balances.view'),balanceList);
  app.get('/api/v2/leave-balances/import/template',authenticate,permitted('leave_balances.import'),balanceTemplate);
