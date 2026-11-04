@@ -1,0 +1,19 @@
+/* HR Leave Balances R1: scoped visual treatment; Staff Profiles, Attendances and Leave Types remain unchanged. */
+.lb-page .lb-stats{margin-bottom:18px}.lb-page .lb-stats .stat{min-height:112px}
+.lb-filter{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:16px;align-items:center}
+.lb-filter .lb-search{grid-column:span 2;display:flex;align-items:center;gap:10px;padding:0 12px}
+.lb-filter .lb-search input{width:100%;height:42px;border:0;outline:0;padding:0;background:transparent;font-size:13px;box-shadow:none}
+.lb-filter select,.lb-filter .lb-search{height:44px;width:100%;min-width:0;box-sizing:border-box;border:1px solid #cbd6e4;border-radius:10px;background:#fff;color:#173451;font-size:13px}
+.lb-filter select{padding:10px 12px;outline:0;cursor:pointer}.lb-filter .lb-search:focus-within,.lb-filter select:focus{border-color:#2d6acc;box-shadow:0 0 0 3px #1e60c624}
+.lb-page .lb-table{min-width:1370px}.lb-page .lb-table td{vertical-align:middle;white-space:nowrap;font-size:13px}.lb-page .lb-table th{white-space:nowrap}
+.lb-page .lb-table td:first-child{min-width:185px}.lb-page .lb-table td small{display:block;margin-top:4px;font-size:11px;color:#64748b;line-height:1.5}
+.lb-page .lb-table .lb-number{text-align:right;font-variant-numeric:tabular-nums}.lb-page .lb-table td:nth-child(10){font-weight:700}
+.lb-page .lb-table .row-actions{display:flex;gap:4px;align-items:center;white-space:nowrap}.lb-page .lb-table .action-icon{width:31px;height:31px;padding:6px}
+.lb-dialog{max-width:950px;max-height:92vh;overflow:auto}.lb-section{padding:16px;border:1px solid #d7e1ed;border-radius:12px;margin:12px 0;background:#fff}
+.lb-section h3{font-size:15px;margin:0 0 14px;color:#173451;border-bottom:1px solid #d9e3ee;padding-bottom:10px}
+.lb-section .form-two{gap:14px}.lb-section .field{min-width:0}.lb-section .field input,.lb-section .field select,.lb-section .field textarea{box-sizing:border-box;width:100%;min-height:42px;border:1px solid #cbd6e4;border-radius:9px;padding:10px 12px;background:#fff;color:#173451;font:inherit;font-size:13px;outline:0}
+.lb-section .field textarea{min-height:90px;resize:vertical}.lb-section .field :is(input,select,textarea):focus{border-color:#2d6acc;box-shadow:0 0 0 3px #1e60c624}.lb-section .field :is(input,select,textarea):disabled{background:#edf1f6;color:#687d93}
+.lb-calculated,.lb-hint{background:#f1f5fb;border-radius:10px;padding:14px;color:#294966}.lb-calculated{display:flex;flex-direction:column;gap:6px;margin-top:15px}.lb-calculated strong{font-size:23px;color:#102e53}.lb-calculated span,.lb-hint{font-size:12px;line-height:1.6}
+.lb-dialog .dialog-actions{position:sticky;bottom:0;z-index:3;background:#fff;padding-top:13px}.lb-import-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:16px 0}.lb-import-actions button{min-height:44px;display:inline-flex;gap:7px;align-items:center}
+.lb-preview{border:1px solid #d7e1ed;border-radius:9px;max-height:235px;overflow:auto;padding:14px}.lb-error{color:#ad2330;font-size:12px;overflow-wrap:break-word}
+@media(max-width:760px){.lb-filter{grid-template-columns:1fr}.lb-filter .lb-search{grid-column:span 1}.lb-dialog .form-two{grid-template-columns:1fr}}

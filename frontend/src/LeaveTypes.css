@@ -1,0 +1,56 @@
+/* HR Leave Types R1 - scoped styles; preserve accepted Staff Profile and Attendance pages. */
+.lt-page .lt-stats{margin-bottom:18px}.lt-page .lt-stats .stat{min-height:113px}
+.lt-filter{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:16px;align-items:center}
+.lt-filter .lt-search{grid-column:span 2;display:flex;align-items:center;gap:10px;padding:0 12px}
+.lt-filter .lt-search input{width:100%;height:42px;border:0;outline:0;padding:0;background:transparent;font-size:13px;box-shadow:none}
+.lt-filter select,.lt-filter .lt-search{height:44px;min-width:0;width:100%;box-sizing:border-box;border:1px solid #cbd6e4;border-radius:10px;background:#fff;color:#173451;font-size:13px}
+.lt-filter select{padding:10px 12px;outline:0;cursor:pointer}
+.lt-filter .lt-search:focus-within,.lt-filter select:focus{border-color:#2d6acc;box-shadow:0 0 0 3px #1e60c624}
+.lt-page .lt-table td{vertical-align:middle}
+.lt-page .lt-table td:first-child{min-width:220px}.lt-page .lt-table td:nth-child(4){min-width:130px}
+.lt-page .lt-table td small{display:block;margin-top:4px;font-size:11px;color:#64748b;line-height:1.5}
+.lt-page .lt-table .row-actions{display:flex;gap:5px;align-items:center;white-space:nowrap}
+.lt-page .lt-table .action-icon{width:32px;height:32px;padding:6px}
+.lt-dialog{max-width:950px;max-height:92vh;overflow:auto}
+.lt-section{padding:16px;border:1px solid #d7e1ed;border-radius:12px;margin:12px 0;background:#fff}
+.lt-section h3{font-size:15px;margin:0 0 14px;color:#173451;border-bottom:1px solid #d9e3ee;padding-bottom:10px}
+.lt-section .form-two{gap:14px}.lt-section .form-two .field{min-width:0}
+.lt-section .field textarea{min-height:74px}.lt-section .lt-description{grid-column:1/-1}
+.lt-dialog .dialog-actions{position:sticky;bottom:0;z-index:3;background:white;padding-top:13px}
+.lt-import-actions{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin:18px 0}
+.lt-import-actions .lt-file-btn{display:inline-flex;align-items:center;gap:7px;min-height:44px}
+.lt-preview{max-height:220px;overflow:auto;padding:12px;border:1px solid #d7e1ed;border-radius:10px}
+.lt-preview .lt-error{color:#9f232d;line-height:1.45;margin:8px 0}
+.lt-hint{padding:12px;background:#f2f6fb;border-radius:9px;font-size:12px;line-height:1.5;color:#365a7a}
+.lt-audit-detail{max-width:420px;min-width:200px;overflow-wrap:break-word}
+@media(max-width:700px){.lt-filter{grid-template-columns:1fr}.lt-filter .lt-search{grid-column:1}.lt-dialog .form-two{grid-template-columns:1fr}.lt-page .lt-table{min-width:850px}}
+
+/* R1.1: Match the approved Leave Types input treatment without changing other modules. */
+.lt-dialog .lt-section .field.lt-description textarea{
+  display:block;
+  width:100%;
+  min-width:0;
+  min-height:88px;
+  box-sizing:border-box;
+  padding:10px 12px;
+  border:1px solid #cbd6e4;
+  border-radius:9px;
+  background:#fff;
+  color:#173451;
+  font:inherit;
+  font-size:13px;
+  font-weight:400;
+  line-height:1.5;
+  resize:vertical;
+  outline:0;
+  transition:border-color .15s ease,box-shadow .15s ease;
+}
+.lt-dialog .lt-section .field.lt-description textarea:focus{
+  border-color:#2d6acc;
+  box-shadow:0 0 0 3px #1e60c624;
+}
+.lt-dialog .lt-section .field.lt-description textarea:disabled{
+  background:#edf1f6;
+  color:#778;
+  cursor:default;
+}
