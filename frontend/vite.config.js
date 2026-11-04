@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { getPublicProxyContext } from './tpos-dev-proxy.js';
+import { getClockGatewayHeaders } from './tpos-clock-gateway.js';
 
 const backendTarget = process.env.TPOS_BACKEND_TARGET || 'http://127.0.0.1:5100';
 const allowedHosts = (process.env.TPOS_DEV_ALLOWED_HOSTS || '')
@@ -16,7 +17,16 @@ function apiProxy() {
     changeOrigin: true,
     configure(proxy) {
       proxy.on('proxyReq', (proxyRequest, request) => {
-        const { host, proto } = getPublicProxyContext(request, allowedHosts);
+        const context = getPublicProxyContext(request, allowedHosts);
+        const { host, proto } = context;
+        // Overwrite any caller-supplied clock-IP headers using the socket observed by Vite.
+        proxyRequest.removeHeader('X-TPOS-Clock-Client-IP');
+        proxyRequest.removeHeader('X-TPOS-Clock-Channel');
+        const observed = getClockGatewayHeaders(request, context);
+        if (observed) {
+          proxyRequest.setHeader('X-TPOS-Clock-Client-IP', observed.ip);
+          proxyRequest.setHeader('X-TPOS-Clock-Channel', observed.channel);
+        }
         if (host) proxyRequest.setHeader('X-Forwarded-Host', host);
         proxyRequest.setHeader('X-Forwarded-Proto', proto);
       });

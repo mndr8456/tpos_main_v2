@@ -56,7 +56,7 @@ export async function attendanceList(req,res){check(req);const f=z.object({searc
  if(f.dateFrom){where.push('a.attendance_date>=?');args.push(attendanceDate(f.dateFrom));}
  if(f.dateTo){where.push('a.attendance_date<=?');args.push(attendanceDate(f.dateTo));}
  if(f.search){const q=`%${f.search}%`;where.push('(sp.staff_no LIKE ? OR u.full_name LIKE ? OR sp.department LIKE ? OR sp.job_title LIKE ?)');args.push(q,q,q,q);}
- const [rows]=await req.auth.pool.execute(`${selectRow} WHERE ${where.join(' AND ')} ORDER BY a.attendance_date DESC,sp.staff_no ASC,a.session_no ASC,a.id ASC LIMIT ${f.limit}`,args);
+ const [rows]=await req.auth.pool.execute(`${selectRow} WHERE ${where.join(' AND ')} ORDER BY a.attendance_date DESC,SUBSTRING_INDEX(sp.staff_no,'-',1) ASC,CAST(SUBSTRING_INDEX(sp.staff_no,'-',-1) AS UNSIGNED) ASC,sp.id ASC,a.session_no ASC,a.id ASC LIMIT ${f.limit}`,args);
  const summary={totalRecords:rows.length,present:rows.filter(x=>x.attendance_status==='Present').length,absentLeave:rows.filter(x=>['Absent','Annual Leave','Medical Leave','Unpaid Leave'].includes(x.attendance_status)).length,pendingApproval:rows.filter(x=>x.approval_status==='Pending').length,workingMinutes:rows.reduce((n,x)=>n+Number(x.working_minutes),0),overtimeMinutes:rows.reduce((n,x)=>n+Number(x.overtime_minutes),0)};
  res.set('Cache-Control','no-store').json({attendance:rows.map(asOutput),summary});}
 export async function attendanceDetails(req,res){check(req);const r=await get(req.auth.pool,numeric.parse(req.params.id));res.set('Cache-Control','no-store').json({attendance:asOutput(r)});}

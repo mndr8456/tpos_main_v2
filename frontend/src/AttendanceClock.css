@@ -1,0 +1,44 @@
+.attendance-clock-page .clock-main-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:16px;margin:18px 0}
+.attendance-clock-page .clock-panel{background:#fff;border:1px solid #d6e2ef;border-radius:13px;padding:20px;margin-bottom:16px;min-width:0}
+.attendance-clock-page .clock-panel h2{font-size:18px;color:#142e50;margin:0 0 16px;display:flex;gap:8px;align-items:center}
+.attendance-clock-page .clock-panel h3{font-size:16px;margin:0 0 5px;color:#172d4d}
+.attendance-clock-page .clock-person{display:flex;align-items:center;gap:15px;margin-bottom:17px}
+.attendance-clock-page .clock-person small{display:block;color:#617995;margin-top:4px;font-size:12px}
+.attendance-clock-page .clock-avatar{width:75px;height:75px;flex:none;display:flex;align-items:center;justify-content:center;background:#e9f0f8;border:1px solid #d4e0ed;border-radius:13px;color:#8ca0b4;overflow:hidden}
+.attendance-clock-page .clock-avatar img{width:100%;height:100%;object-fit:cover}
+.attendance-clock-page .clock-info{display:flex;align-items:center;justify-content:space-between;border-top:1px solid #e8eef5;padding:13px 0;gap:12px;font-size:13px}
+.attendance-clock-page .clock-info span,.attendance-clock-page .clock-active-head span{color:#647c99}
+.attendance-clock-page .clock-active-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:10px}
+.attendance-clock-page .clock-active h2{font-size:24px}
+.attendance-clock-page .clock-status{font-size:12px;font-weight:700;padding:7px 12px;border-radius:20px;background:#f1f4fa;color:#344d6a;display:inline-flex;text-align:center}
+.attendance-clock-page .clock-status-good{background:#e5f7ed;color:#11653b}.attendance-clock-page .clock-status-warn{background:#fff2d9;color:#925711}
+.attendance-clock-page .clock-network-allowed,.attendance-clock-page .clock-network-blocked{border-radius:10px;padding:12px;font-size:13px;margin:10px 0;display:grid;gap:5px}
+.attendance-clock-page .clock-network-allowed{background:#eaf8f0;color:#146441}.attendance-clock-page .clock-network-blocked{background:#fff2e9;color:#9e452d}
+.attendance-clock-page .clock-network-allowed span,.attendance-clock-page .clock-network-blocked span{display:flex;align-items:center;gap:8px;font-weight:700}
+.attendance-clock-page .clock-punch-form{display:grid;gap:12px;margin-top:15px}
+.attendance-clock-page .clock-punch-form label,.attendance-clock-page .clock-fields label,.attendance-clock-page .clock-history-filters label{display:grid;gap:6px;font-size:12px;color:#526c8d;font-weight:600}
+.attendance-clock-page textarea,.attendance-clock-page input,.attendance-clock-page select{border:1px solid #cbd8e8;border-radius:10px;background:#fff;padding:11px 12px;color:#173451;box-sizing:border-box;width:100%;min-height:44px;font:inherit;font-size:13px}
+.attendance-clock-page textarea{min-height:70px;resize:vertical}
+.attendance-clock-page textarea:focus,.attendance-clock-page input:focus,.attendance-clock-page select:focus{outline:2px solid #86aae4;outline-offset:0}
+.attendance-clock-page .clock-punch{min-height:44px;display:flex;gap:9px;align-items:center;justify-content:center}
+.attendance-clock-page .clock-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:19px}
+.attendance-clock-page .clock-stat{background:#fff;border:1px solid #d8e3ef;border-radius:12px;padding:14px;display:grid;gap:10px;min-width:0}
+.attendance-clock-page .clock-stat span{font-size:12px;color:#57718e}.attendance-clock-page .clock-stat b{font-size:20px;color:#15355d}
+.attendance-clock-page .clock-table{min-width:950px;width:100%}.attendance-clock-page .clock-table td,.attendance-clock-page .clock-table th{font-size:13px;padding:12px 10px;text-align:center;white-space:nowrap}
+.attendance-clock-page .clock-table th{font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:#627d9d}
+.attendance-clock-page .clock-table tr+tr{border-top:1px solid #e5edf5}
+.attendance-clock-page .clock-head-row{display:flex;justify-content:space-between;align-items:center;gap:15px}
+.attendance-clock-page .clock-history-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:15px}
+.attendance-clock-page .clock-history-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-bottom:15px}
+.attendance-clock-page .clock-history-summary .clock-stat{background:#f4f7fc}.attendance-clock-page .clock-history-summary .clock-stat b{font-size:16px}
+.attendance-clock-page .clock-admin-toggle{width:100%;border:1px solid #ccdbe9;border-radius:12px;background:#fff;color:#193b63;font-weight:700;display:flex;align-items:center;gap:9px;padding:15px;text-align:left;cursor:pointer}
+.attendance-clock-page .clock-admin-toggle span{margin-left:auto;color:#637b98;font-size:12px}
+.attendance-clock-page .clock-admin-content{padding:15px 0}.attendance-clock-page .clock-admin-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+.attendance-clock-page .clock-subpanel{background:#fff;border:1px solid #d8e2ee;border-radius:12px;padding:16px;min-width:0}
+.attendance-clock-page .clock-subpanel h3{margin:0 0 15px;font-size:16px;color:#173451}
+.attendance-clock-page .clock-fields{display:grid;gap:12px;margin-bottom:18px}.attendance-clock-page .clock-fields .primary{display:flex;align-items:center;justify-content:center;gap:7px;min-height:42px}
+.attendance-clock-page .clock-setting-rows{max-height:250px;overflow:auto;border-top:1px solid #e1e9f3}
+.attendance-clock-page .clock-setting-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #e6edf4}
+.attendance-clock-page .clock-setting-row span{min-width:0;word-break:break-word}.attendance-clock-page .clock-setting-row small{display:block;color:#617c99;font-size:11px;margin-top:4px}
+@media(max-width:860px){.attendance-clock-page .clock-main-grid,.attendance-clock-page .clock-admin-grid{grid-template-columns:1fr}.attendance-clock-page .clock-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:560px){.attendance-clock-page .clock-stats,.attendance-clock-page .clock-history-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.attendance-clock-page .clock-history-filters{grid-template-columns:1fr}}

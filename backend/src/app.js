@@ -23,6 +23,7 @@ import {tableMeta,listTables,createTable,updateTable,archiveTable,tableAudit,exp
 import {inventoryMeta,inventoryBalances,inventoryMovements,openInventoryBalance} from './inventory.js';
 import {cashCheckout,getCashReceipt} from './pos-cash-checkout.js';
 import {attendanceMeta,attendanceList,attendanceDetails,createAttendance,updateAttendance,approveAttendance,statusAttendance,attendanceAudit,attendanceTemplate,previewAttendanceImport,confirmAttendanceImport} from './attendances.js';
+import {attendanceClockToday,attendanceClockHistory,attendanceClockPunch,attendanceClockAdminMeta,addOfficeNetwork,disableOfficeNetwork,grantRemoteClock,revokeRemoteClock} from './attendance-clock.js';
 import {staffMeta,staffNextNumber,listStaff,getStaff,getMyStaff,createStaff,updateStaff,updateMyStaff,changeStaffStatus,staffAudit,staffImage,uploadStaffImage,removeStaffImage,staffCsvTemplate,previewStaffImport,confirmStaffImport} from './staff-profiles.js';
 import {listPaymentMethods,savePaymentMethod,uploadPaymentImage,removePaymentImage,readPaymentImage,paymentMethodAudit} from './payment-methods.js';
 import {cashDrawerMeta,listCashDrawer,recordCashDrawerOpen,cashDrawerAudit,exportCashDrawer} from './cash-drawer.js';
@@ -58,6 +59,14 @@ export function createApp(){
  app.post('/api/v2/auth/logout',authenticate,logout);
  app.post('/api/v2/auth/change-password',authenticate,changePassword);
  app.get('/api/v2/dashboard/overview',authenticate,permitted('dashboard.view'),dashboardOverview);
+ app.get('/api/v2/attendance-clock/today',authenticate,permitted('attendance_clock.view'),attendanceClockToday);
+ app.get('/api/v2/attendance-clock/history',authenticate,permitted('attendance_clock.view'),attendanceClockHistory);
+ app.post('/api/v2/attendance-clock/:kind',authenticate,permitted('attendance_clock.punch'),attendanceClockPunch);
+ app.get('/api/v2/attendance-clock-admin/meta',authenticate,permitted('attendance_clock.manage'),attendanceClockAdminMeta);
+ app.post('/api/v2/attendance-clock-admin/networks',authenticate,permitted('attendance_clock.manage'),addOfficeNetwork);
+ app.patch('/api/v2/attendance-clock-admin/networks/:id/disable',authenticate,permitted('attendance_clock.manage'),disableOfficeNetwork);
+ app.post('/api/v2/attendance-clock-admin/remote-grants',authenticate,permitted('attendance_clock.manage'),grantRemoteClock);
+ app.patch('/api/v2/attendance-clock-admin/remote-grants/:id/revoke',authenticate,permitted('attendance_clock.manage'),revokeRemoteClock);
  app.get('/api/v2/attendances/meta',authenticate,permitted('attendances.view'),attendanceMeta);
  app.get('/api/v2/attendances',authenticate,permitted('attendances.view'),attendanceList);
  app.get('/api/v2/attendances/import/template',authenticate,permitted('attendances.import'),attendanceTemplate);
