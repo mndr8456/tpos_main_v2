@@ -49,7 +49,7 @@ test('New tenants provision Dashboard access after original Dashboard and Discou
 test('Dashboard permission drives frontend landing, sidebar and protected API without new UI overrides',async()=>{
  const app=await read('frontend/src/App.jsx');
  const api=await read('backend/src/app.js');
- assert.match(app,/const landingPage=profile=>profile\?\.user\?\.permissions\?\.includes\('dashboard\.view'\)/);
+ assert.match(app,/import \{landingPage\} from '\.\/role-navigation\.js'/);
  assert.match(app,/const canViewDashboard=profile\.user\.permissions\.includes\('dashboard\.view'\)/);
  assert.ok((app.match(/\bcanViewDashboard\b/g)||[]).length>=3,'Dashboard permission must guard navigation and the rendered page');
  assert.match(app,/page==='dashboard'&&canViewDashboard\?<Dashboard/);

@@ -1,6 +1,6 @@
 // Local Malaysian wall-clock arithmetic. Never parse a browser datetime as UTC.
-export const attendanceStatuses=['Present','Late','Absent','Half Day','Annual Leave','Medical Leave','Unpaid Leave','Rest Day','Public Holiday'];
-export const nonWorkStatuses=['Absent','Annual Leave','Medical Leave','Unpaid Leave','Rest Day','Public Holiday'];
+export const attendanceStatuses=['Present','Late','Absent','Half Day','Annual Leave','Medical Leave','Unpaid Leave','Emergency Leave','Rest Day','Public Holiday'];
+export const nonWorkStatuses=['Absent','Annual Leave','Medical Leave','Unpaid Leave','Emergency Leave','Rest Day','Public Holiday'];
 export const attendanceSources=['Manual','Web','Mobile','POS','Biometric','Import','Leave'];
 export const attendanceImportHeaders=['staff_no','attendance_date','session_no','scheduled_clock_in','scheduled_clock_out','clock_in','clock_out','break_minutes','attendance_status','clock_in_notes','clock_out_notes','status'];
 export class AttendanceError extends Error{constructor(code,status=400){super(code);this.code=code;this.status=status;}}

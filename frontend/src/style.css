@@ -613,3 +613,17 @@
  #shift-closing-receipt{position:absolute;left:0;top:0;width:72mm!important;max-width:72mm!important;margin:0!important;padding:0!important;background:#fff!important;color:#000!important}
  .shift-receipt-controls{display:none!important}
 }
+
+/* Operational sidebar: all sections closed on every hamburger opening. */
+.workspace .side-group-trigger[aria-expanded="false"]{color:#b5cdea}
+.workspace .side-group-trigger[aria-expanded="true"]{background:#123457;color:#fff}
+.workspace .nav[disabled]{opacity:.65;cursor:not-allowed;background:transparent}
+.workspace .nav .nav-planned{margin-left:auto;color:#aac2df;font-size:10px;font-weight:700}
+.my-profile-heading{margin:22px 0;display:flex;align-items:center;gap:12px;color:#223b60}
+.my-profile-heading>div{display:grid;gap:4px}.my-profile-heading span{color:#6d809a;font-size:12px}
+.my-profile-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
+.my-profile-panel{padding:24px;display:grid;gap:16px}
+.my-profile-panel h2{display:flex;align-items:center;gap:10px;font-size:19px;margin:0 0 7px}
+.my-profile-panel p{margin:0;display:flex;align-items:center;gap:7px}
+.my-profile-panel .primary{justify-self:end}
+@media(max-width:780px){.my-profile-grid{grid-template-columns:1fr}}

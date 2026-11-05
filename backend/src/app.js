@@ -20,7 +20,7 @@ import {getSstSettings,saveSstSettings,listSstAudit} from './sst-settings.js';
 import {getServiceChargeSettings,saveServiceChargeSettings,listServiceChargeAudit} from './service-charge.js';
 import {posBootstrap,listPosDrafts,createPosDraft,getPosDraft,addPosLine,changePosLine,changePosDraftStatus,quotePosDraft,posDraftAudit,assignPosTable} from './pos-drafts.js';
 import {tableMeta,listTables,createTable,updateTable,archiveTable,tableAudit,exportTables,tableTemplate,previewTableImport,importTables} from './restaurant-tables.js';
-import {inventoryMeta,inventoryBalances,inventoryMovements,openInventoryBalance} from './inventory.js';
+import {inventoryMeta,inventoryBalances,inventoryMovements,openInventoryBalance,receiveInventory} from './inventory.js';
 import {cashCheckout,getCashReceipt} from './pos-cash-checkout.js';
 import {attendanceMeta,attendanceList,attendanceDetails,createAttendance,updateAttendance,approveAttendance,statusAttendance,attendanceAudit,attendanceTemplate,previewAttendanceImport,confirmAttendanceImport} from './attendances.js';
 import {attendanceClockToday,attendanceClockHistory,attendanceClockPunch,attendanceClockAdminMeta,addOfficeNetwork,disableOfficeNetwork,grantRemoteClock,revokeRemoteClock} from './attendance-clock.js';
@@ -160,6 +160,7 @@ export function createApp(){
  app.get('/api/v2/inventory/balances',authenticate,permitted('inventory.view'),inventoryBalances);
  app.get('/api/v2/inventory/movements',authenticate,permitted('inventory.audit'),inventoryMovements);
  app.post('/api/v2/inventory/opening',authenticate,permitted('inventory.opening'),openInventoryBalance);
+ app.post('/api/v2/inventory/receive',authenticate,permitted('inventory.receive'),receiveInventory);
  app.get('/api/v2/pos/bootstrap',authenticate,permitted('pos.view'),posBootstrap);
  app.get('/api/v2/pos/drafts',authenticate,permitted('pos.view'),listPosDrafts);
  app.post('/api/v2/pos/drafts',authenticate,permitted('pos.cart.manage'),createPosDraft);

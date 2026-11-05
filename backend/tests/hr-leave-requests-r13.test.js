@@ -21,39 +21,40 @@ test('R1.3 approval explains an open Clock In on requested dates without bypassi
  assert.equal(approvalBlocker('POSTED'),null);
 });
 test('R1.3 approval explains an existing completed attendance and never permits silent overwrite',()=>{
- assert.match(approvalBlocker('EXISTING_ATTENDANCE'),/Attendance record already exists/);
+ assert.match(approvalBlocker('EXISTING_ATTENDANCE'),/protected Attendance record exists/);
  assert.match(approvalBlocker('EXISTING_ATTENDANCE'),/must not be deleted or overwritten/);
  assert.match(approvalErrorMessage({message:'EXISTING_ATTENDANCE_REQUIRES_HR_REVIEW'}),/cannot be overwritten/);
 });
 test('R1.3 Leave Request detail checks the requested period, not unrelated historic open punches',()=>{
- const api=source('../src/leave-requests.js');
+ const api=source('../src/leave-requests.js'),classifier=source('../src/leave-request-attendance.js');
  const detail=api.split('export async function requestDetail')[1].split('export async function requestCreate')[0];
- assert.match(detail,/attendance_date BETWEEN \? AND \?/);
- assert.match(detail,/AS open_punches/);
+ assert.match(detail,/req.auth.pool.execute\(leaveAttendanceSelect,\[r.staff_profile_id,r.start_date,r.end_date\]\)/);
+ assert.match(classifier,/attendance_date BETWEEN \? AND \?/);
  assert.match(detail,/const attendanceState=/);
- assert.match(detail,/attendanceState\}/);
- assert.doesNotMatch(detail,/otherOpen|clock_in IS NOT NULL AND clock_out IS NULL AND status='active'/);
+ assert.match(detail,/attendanceState,scheduleConversionCount/);
 });
-test('R1.3 Approve locks same-date attendance and blocks overlaps, but not an unrelated historical day',()=>{
+test('R1.3 Approve locks same-date attendance and refuses actual punches or final records',()=>{
  const api=source('../src/leave-requests.js');
  const review=api.split('export async function requestReview')[1].split('export async function requestCancel')[0];
- assert.match(review,/await tx\(req\.auth\.pool,async c=>/);
- assert.match(review,/attendance_date BETWEEN \? AND \? FOR UPDATE/);
- assert.match(review,/conflicts\.some\(x=>x\.clock_in&&!x\.clock_out\).*UNCLOSED_CLOCK_PUNCH/);
- assert.match(review,/if\(conflicts\.length\)fail\('EXISTING_ATTENDANCE_REQUIRES_HR_REVIEW'/);
- assert.doesNotMatch(review,/WHERE staff_profile_id=\? AND status='active' AND clock_in IS NOT NULL AND clock_out IS NULL/);
- assert.ok(review.indexOf('if(conflicts.length)')<review.indexOf('INSERT INTO hr_attendances'));
+ assert.match(review,/await tx\(req.auth.pool,async c=>/);
+ assert.match(review,/leaveAttendanceSelect} FOR UPDATE/);
+ assert.match(review,/if\(attendanceState==='OPEN_PUNCH'\)fail\('UNCLOSED_CLOCK_PUNCH'/);
+ assert.match(review,/if\(attendanceState==='EXISTING_ATTENDANCE'\)fail\('EXISTING_ATTENDANCE_REQUIRES_HR_REVIEW'/);
+ assert.ok(review.indexOf("attendanceState==='EXISTING_ATTENDANCE'")<review.indexOf('INSERT INTO hr_attendances'));
  assert.ok(review.indexOf('INSERT INTO hr_attendances')<review.indexOf("'APPROVE',dayCents"));
 });
 test('R1.3 frontend Refresh uses shared helper; approval performs fresh preflight before POST',()=>{
  const ui=source('../../frontend/src/LeaveRequests.jsx');
  assert.match(ui,/Refresh Leave Requests',RefreshCw,\(\)=>refreshPage\(load,notify\)/);
- const action=ui.split('const act=async(row,decision)=>')[1].split('const cancel=')[0];
- assert.match(action,/const latest=await request\(`\/leave-requests\/\$\{row\.id\}`\)/);
- assert.ok(action.indexOf('const latest=')<action.indexOf('window.confirm'));
- assert.ok(action.indexOf('approvalBlocker(latest.attendanceState)')<action.indexOf("method:'POST'"));
+ const preflight=ui.split('const openReview=async(row,decision)=>')[1].split('const submitReview=')[0];
+ const submit=ui.split('const submitReview=async()=>')[1].split('const cancel=')[0];
+ assert.match(preflight,/const latest=await request\(`\/leave-requests\/\$\{row\.id\}`\)/);
+ assert.ok(preflight.indexOf('const latest=')<preflight.indexOf('setReview('));
+ assert.ok(preflight.indexOf('approvalBlocker(latest.attendanceState)')<preflight.indexOf('setReview('));
+ assert.match(submit,/method:'POST'/);
+ assert.match(submit,/validReviewDetails\(review\.remarks\)/);
  assert.match(ui,/role="alert"/);
- assert.match(ui,/disabled=\{busy\|\|Boolean\(blocker\)\}/);
+ assert.match(ui,/disabled=\{busy\} title=\{blocker/);
  assert.match(ui,/Recheck Attendance/);
 });
 test('R1.3 protects approved R1.2 spacing, removes CSV Import and preserves Export PDF',()=>{

@@ -8,12 +8,13 @@ const pdf=readFileSync(new URL('../../frontend/src/discount-pdf.js',import.meta.
 const appRoutes=readFileSync(new URL('../src/app.js',import.meta.url),'utf8');
 
 test('V1 master data order is retained for implemented modules (excluding loyalty)',()=>{
- const master=app.slice(app.indexOf("title:'Master Data'"),app.indexOf("title:'Transactions'"));
- const names=['users','categories','products','suppliers','vouchers','discounts','cash-shifts'];
+ const master=app.slice(app.indexOf("title:'Data'"),app.indexOf("title:'Transactions'"));
+ const names=['users','categories','products','suppliers','vouchers','discounts'];
  const indices=names.map(id=>master.indexOf(`id:'${id}'`));
  assert.ok(indices.every(n=>n>=0));
  assert.deepEqual(indices,[...indices].sort((a,b)=>a-b));
  assert.doesNotMatch(master,/loyalty|Customers.*disabled/);
+ assert.match(app,/title:'Transactions'[\s\S]*?id:'cash-shifts'/);
 });
 test('V1 navigation groups show only allowed implemented pages, and Dashboard follows grants',()=>{
  assert.match(app,/title:'Transactions'/);

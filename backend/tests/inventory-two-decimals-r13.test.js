@@ -13,7 +13,7 @@ const installer=read('backend/scripts/setup-inventory-two-decimals.js');
 test('Stock list has exact approved headers in the approved order',()=>{
  assert.match(ui,/\['SKU','Product','Branch','Status','QOH','Cost \(RM\)','Total \(RM\)','', 'Actions'\]/);
  assert.doesNotMatch(ui,/\['#','SKU','Product','Branch','Stock Status','Quantity On Hand'/);
- assert.match(ui,/colSpan="9"/);
+ assert.match(ui,/colSpan=\{canSeeValue\?9:7\}/);
 });
 test('All Inventory visible quantities, ledger quantities, exports and modal default use two decimals',()=>{
  assert.match(ui,/r\.initialized\?decimal\(r\.quantity_on_hand\)/);

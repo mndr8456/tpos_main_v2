@@ -13,7 +13,7 @@ const backend=read('backend/src/inventory.js');
 test('Sidebar includes Stock / Inventory with permission and a real page',()=>{
  assert.match(app,/import Inventory from '\.\/Inventory\.jsx'/);
  assert.match(app,/canViewInventory=profile\.user\.permissions\.includes\('inventory\.view'\)/);
- assert.match(app,/id:'inventory',label:'Stock \/ Inventory'/);
+ assert.match(app,/id:'inventory',label:profile\.user\.role==='STAFF'\?'Stock':'Stock \/ Inventory'/);
  assert.match(app,/page==='inventory'&&canViewInventory\?<Inventory profile=\{profile\}/);
 });
 test('Stock page reads tenant balances and stockable product metadata, not fake stock fixtures',()=>{

@@ -1,7 +1,7 @@
 // HR Leave Types R1: strict V1-compatible 15-field policy validation and safe CSV parsing.
 import {z} from 'zod';
 export class LeaveTypeError extends Error{constructor(message,status=400){super(message);this.name='LeaveTypeError';this.status=status;}}
-export const attendanceMappings=['Annual Leave','Medical Leave','Unpaid Leave'];
+export const attendanceMappings=['Annual Leave','Medical Leave','Unpaid Leave','Emergency Leave'];
 export const leaveGenders=['All','Male','Female'];
 export const leaveStatuses=['active','inactive'];
 export const leaveHeaders=['leave_code','leave_name','description','attendance_status','default_entitlement_days','is_paid','requires_attachment','allow_half_day','allow_carry_forward','max_carry_forward_days','max_days_per_request','minimum_service_months','gender_restriction','sort_order','status'];
@@ -27,6 +27,7 @@ const bodySchema=z.object({
  sort_order:z.coerce.number().int().min(0).max(999999),
  status:z.enum(leaveStatuses)
 }).strict().superRefine((v,ctx)=>{
+ if(v.leave_code==='EL' && v.attendance_status!=='Emergency Leave')ctx.addIssue({code:'custom',path:['attendance_status'],message:'EL must use Emergency Leave attendance status, not Annual Leave.'});
  if(!v.allow_carry_forward && Number(v.max_carry_forward_days)!==0)ctx.addIssue({code:'custom',path:['max_carry_forward_days'],message:'Max Carry Forward must be 0.00 when Carry Forward is disabled.'});
  if(v.max_days_per_request!==null&&Number(v.max_days_per_request)<(v.allow_half_day?0.5:1))ctx.addIssue({code:'custom',path:['max_days_per_request'],message:'Maximum request days is too small.'});
 });

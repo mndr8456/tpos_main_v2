@@ -8,6 +8,8 @@ import {refreshPage} from './refresh-page.js';
 import CashDrawer from './CashDrawer.jsx';
 import RestaurantTables from './RestaurantTables.jsx';
 import Inventory from './Inventory.jsx';
+import MyProfile from './MyProfile.jsx';
+import {landingPage} from './role-navigation.js';
 import PaymentMethods from './PaymentMethods.jsx';
 import SstSettings from './SstSettings.jsx';
 import ServiceChargeSettings from './ServiceChargeSettings.jsx';
@@ -24,12 +26,11 @@ import Products from './Products.jsx';
 import Discounts from './Discounts.jsx';
 import Vouchers from './Vouchers.jsx';
 import CashShifts from './CashShifts.jsx';
-import { BadgePercent,Ticket,Wallet,Archive, CreditCard,ShoppingCart,ReceiptText,ChevronDown,Table2,Boxes,IdCard,CalendarClock,Clock3,ClipboardList,CalendarRange } from 'lucide-react';
+import { BadgePercent,Ticket,Wallet,Archive, CreditCard,ShoppingCart,ReceiptText,ChevronDown,UserRound,Table2,Boxes,IdCard,CalendarClock,Clock3,ClipboardList,CalendarRange } from 'lucide-react';
 
 const types=['RESTAURANT','GROCERY','RETAIL','MINI_MARKET','CAFE','FOOD_TRUCK','STREET_FOOD'];
 const regFields=[['businessName','Registered Business Name'],['ssmRegistrationNumber','SSM Registration Number'],['ssmOldRegistrationNumber','Old SSM (optional)'],['tin','TIN (optional)'],['sstSalesTaxNumber','SST Number Sales Tax (optional)'],['sstServiceTaxNumber','SST Number Service Tax (optional)'],['phone','Business Phone (optional)'],['addressLine1','Address Line 1'],['addressLine2','Address Line 2 (optional)'],['city','City'],['postcode','Postcode'],['state','State'],['ownerName','Owner Full Name'],['ownerEmail','Owner Email'],['ownerPassword','Owner Password']];
 const initialReg={businessType:'RESTAURANT'};
-const landingPage=profile=>profile?.user?.permissions?.includes('dashboard.view')?'dashboard':profile?.user?.permissions?.includes('users.view')?'users':profile?.user?.permissions?.includes('categories.view')?'categories':profile?.user?.permissions?.includes('cash_shifts.view')?'cash-shifts':profile?.user?.permissions?.includes('cash_drawer.view')?'cash-drawer':profile?.user?.permissions?.includes('attendance_clock.view')?'attendance-clock':profile?.user?.permissions?.includes('leave_requests.self')?'leave-requests':'account';
 const initialUser={fullName:'',username:'',email:'',phone:'',role:'CASHIER',branchId:'1',password:'',status:'ACTIVE'};
 function Field({label,value,onChange,type='text',required=false,placeholder='',...rest}){
  return <label className="field"><span>{label}</span><input type={type} value={value ?? ''} onChange={e=>onChange(e.target.value)} required={required} placeholder={placeholder} {...rest}/></label>;
@@ -145,7 +146,7 @@ function PasswordView({onDone,notify}){
  return <div className="page"><div className="table-panel narrow"><h2>Change your password</h2><p className="muted">A new password is required before you can access other modules.</p><form className="auth-form" onSubmit={submit}><Field type="password" label="Current Password" required value={current} onChange={setCurrent}/><Field type="password" label="New Password (12+ characters, letters and numbers)" required value={next} onChange={setNext}/><button disabled={busy} type="submit" className="primary">Change Password</button></form></div></div>;
 }
 export function App(){
- const [profile,setProfile]=useState(null),[loading,setLoading]=useState(true),[sidebar,setSidebar]=useState(false),[notice,setNotice]=useState({error:'',message:''}),[page,setPage]=useState('dashboard'),[openNavGroups,setOpenNavGroups]=useState({"Master Data":true,"Transactions":true,"Settings":true}),[selfEmailEdit,setSelfEmailEdit]=useState(false),[selfEmailBusy,setSelfEmailBusy]=useState(false);
+ const [profile,setProfile]=useState(null),[loading,setLoading]=useState(true),[sidebar,setSidebar]=useState(false),[notice,setNotice]=useState({error:'',message:''}),[page,setPage]=useState('dashboard'),[openNavGroups,setOpenNavGroups]=useState(null),[selfEmailEdit,setSelfEmailEdit]=useState(false),[selfEmailBusy,setSelfEmailBusy]=useState(false);
  const notify=useCallback((message,error=false)=>setNotice(error?{error:message,message:''}:{error:'',message}),[]);
  useEffect(()=>{request('/auth/me').then(p=>{setProfile(p);setPage(landingPage(p));}).catch(()=>{}).finally(()=>setLoading(false));},[]);
  // Close the docked navigation on an outside pointer press (including the POS content),
@@ -163,9 +164,9 @@ export function App(){
   window.addEventListener('keydown',onEscape);
   return ()=>{document.removeEventListener('pointerdown',onOutside);window.removeEventListener('keydown',onEscape);};
  },[sidebar]);
- async function signOut(){try{await request('/auth/logout',{method:'POST',body:{}});}catch{}setProfile(null);setSidebar(false);}
+ async function signOut(){try{await request('/auth/logout',{method:'POST',body:{}});}catch{}setProfile(null);setSidebar(false);setOpenNavGroups(null);}
  if(loading)return <div className="loading">Loading TPOS...</div>;
- if(!profile)return <AuthView onAuth={p=>{setProfile(p);setPage(landingPage(p));setSidebar(false);setNotice({error:'',message:''});}}/>;
+ if(!profile)return <AuthView onAuth={p=>{setProfile(p);setPage(landingPage(p));setSidebar(false);setOpenNavGroups(null);setNotice({error:'',message:''});}}/>;
  const canViewStaff=profile.user.permissions.includes('staff_profiles.view')||profile.user.permissions.includes('staff_profiles.self');
  const canViewDashboard=profile.user.permissions.includes('dashboard.view');
  const hasView=profile.user.permissions.includes('users.view');
@@ -187,21 +188,20 @@ export function App(){
  const canViewLeaveBalances=profile.user.permissions.includes('leave_balances.view');
  const canViewLeaveRequests=profile.user.permissions.some(p=>p==='leave_requests.view'||p==='leave_requests.self');
  const canViewRestaurantTables=profile.user.permissions.includes('restaurant_tables.view')&&['RESTAURANT','CAFE'].includes(String(profile.business.type).toUpperCase());
- // Follow the V1 order for implemented modules. Unbuilt V1 modules have no broken links.
- // Visibility is derived from the authenticated tenant's permission grants, not a static role.
+ // Role grants are the only authorization source. Migration 033 updates the initial
+ // operational-role defaults once; later Role Permissions changes remain effective.
  const navigationGroups=[
-  {title:'Master Data',entries:[
+  {title:'Data',entries:[
    {id:'users',label:'Users',icon:Users,show:hasView},
    {id:'categories',label:'Categories',icon:Tags,show:canViewCategories},
    {id:'products',label:'Products',icon:Package,show:canViewProducts},
    {id:'suppliers',label:'Suppliers',icon:Truck,show:canViewSuppliers},
    {id:'restaurant-tables',label:'Restaurant Tables',icon:Table2,show:canViewRestaurantTables},
    {id:'vouchers',label:'Vouchers',icon:Ticket,show:canViewVouchers},
-   {id:'discounts',label:'Discounts',icon:BadgePercent,show:canViewDiscounts},
-   {id:'cash-shifts',label:'Cash Shifts',icon:Wallet,show:canViewCashShifts}
+   {id:'discounts',label:'Discounts',icon:BadgePercent,show:canViewDiscounts}
   ]},
   {title:'HR',entries:[
-   {id:'staff-profiles',label:'Staff Profiles',icon:IdCard,show:canViewStaff},
+   {id:'staff-profiles',label:'Staff Profile',icon:IdCard,show:canViewStaff},
    {id:'attendances',label:'Attendances',icon:CalendarClock,show:canViewAttendances},
    {id:'attendance-clock',label:'Attendance Clock',icon:Clock3,show:canViewClock},
    {id:'leave-types',label:'Leave Types',icon:ClipboardList,show:canViewLeaveTypes},
@@ -209,8 +209,11 @@ export function App(){
    {id:'leave-requests',label:'Leave Requests',icon:ClipboardList,show:canViewLeaveRequests}
   ]},
   {title:'Transactions',entries:[
+   {id:'cash-shifts',label:'Cash Shifts',icon:Wallet,show:canViewCashShifts},
    {id:'pos',label:'POS Terminal',icon:ShoppingCart,show:canViewPos},
-   {id:'inventory',label:'Stock / Inventory',icon:Boxes,show:canViewInventory},
+   {id:'order-terminal',label:'Order Terminal',icon:ClipboardList,show:profile.user.role==='WAITER',planned:true},
+   {id:'kds',label:'KDS',icon:ReceiptText,show:profile.user.role==='KITCHEN',planned:true},
+   {id:'inventory',label:profile.user.role==='STAFF'?'Stock':'Stock / Inventory',icon:Boxes,show:canViewInventory},
    {id:'cash-drawer',label:'Log Cash Drawer',icon:Archive,show:canViewCashDrawer}
   ]},
   {title:'Settings',entries:[
@@ -219,30 +222,32 @@ export function App(){
    {id:'service-charge',label:'Service Charge Settings',icon:ReceiptText,show:canViewServiceCharge}
   ]}
  ].map(group=>({...group,entries:group.entries.filter(entry=>entry.show)})).filter(group=>group.entries.length);
+
  const navigate=next=>{
-  setPage(next);
+  setPage(next);setOpenNavGroups(null);
   // V1 desktop navigation remains open until the hamburger is pressed again.
   // On narrow/mobile screens the overlay closes after a selection.
   if(window.matchMedia('(max-width: 900px)').matches)setSidebar(false);
  };
- const navItem=(entry)=>{const ItemIcon=entry.icon;return <button key={entry.id} type="button" className={page===entry.id?'nav active':'nav'} aria-current={page===entry.id?'page':undefined} onClick={()=>navigate(entry.id)}><ItemIcon size={18}/><span>{entry.label}</span></button>;};
+ const navItem=(entry)=>{const ItemIcon=entry.icon;return <button key={entry.id} type="button" disabled={Boolean(entry.planned)} title={entry.planned?'Planned — not yet available':entry.label} className={page===entry.id?'nav active':'nav'} aria-current={page===entry.id?'page':undefined} onClick={()=>navigate(entry.id)}><ItemIcon size={18}/><span>{entry.label}</span>{entry.planned&&<span className="nav-planned">Planned</span>}</button>;};
  return <div className={sidebar?"workspace sidebar-expanded":"workspace"}>
  {sidebar&&<button type="button" className="sidebar-scrim" aria-label="Close navigation" onClick={()=>setSidebar(false)} tabIndex={-1}/>}
  <aside id="workspace-navigation" aria-label="Workspace navigation" className={sidebar?'sidebar open':'sidebar'} aria-hidden={!sidebar} inert={!sidebar}>
   <div className="sidebar-inner">
    <div className="side-brand">TPOS <span>V2</span></div>
    {canViewDashboard&&navItem({id:'dashboard',label:'Dashboard',icon:LayoutDashboard})}
+   {navItem({id:'profile',label:'Profile',icon:UserRound})}
    {navigationGroups.map(group=><section key={group.title} className="side-group">
-    <button type="button" className="side-group-trigger" onClick={()=>setOpenNavGroups(current=>({...current,[group.title]:current[group.title]===false}))} aria-expanded={openNavGroups[group.title]!==false}>
-     <span>{group.title}</span><ChevronDown size={15} className={openNavGroups[group.title]===false?'collapsed':''}/>
+    <button type="button" className="side-group-trigger" onClick={()=>setOpenNavGroups(current=>current===group.title?null:group.title)} aria-expanded={openNavGroups===group.title}>
+     <span>{group.title}</span><ChevronDown size={15} className={openNavGroups===group.title?'':'collapsed'}/>
     </button>
-    {openNavGroups[group.title]!==false&&<div className="side-group-items">{group.entries.map(navItem)}</div>}
+    {openNavGroups===group.title&&<div className="side-group-items">{group.entries.map(navItem)}</div>}
    </section>)}
   </div>
  </aside>
- <div className="main-column"><header className="topbar"><div className="top-left"><button type="button" className="icon-button" aria-label={sidebar?"Close navigation":"Open navigation"} title={sidebar?"Close navigation":"Open navigation"} data-sidebar-toggle aria-controls="workspace-navigation" aria-expanded={sidebar} onClick={()=>setSidebar(current=>!current)}><Menu size={21}/></button><div className="workspace-name"><Building2 size={18}/><div><b>{profile.business.name}</b><small>{profile.user.role} / {profile.business.type||'Business'}</small></div></div></div><div className="top-right"><span>{profile.user.fullName}</span><button className="outline action-icon" title="Sign Out" aria-label="Sign Out" onClick={signOut}><LogOut size={19}/></button></div></header>
+ <div className="main-column"><header className="topbar"><div className="top-left"><button type="button" className="icon-button" aria-label={sidebar?"Close navigation":"Open navigation"} title={sidebar?"Close navigation":"Open navigation"} data-sidebar-toggle aria-controls="workspace-navigation" aria-expanded={sidebar} onClick={()=>{setOpenNavGroups(null);setSidebar(current=>!current);}}><Menu size={21}/></button><div className="workspace-name"><Building2 size={18}/><div><b>{profile.business.name}</b><small>{profile.user.role} / {profile.business.type||'Business'}</small></div></div></div><div className="top-right"><span>{profile.user.fullName}</span><button className="outline action-icon" title="Sign Out" aria-label="Sign Out" onClick={signOut}><LogOut size={19}/></button></div></header>
   <Notice error={notice.error} message={notice.message} onClose={()=>setNotice({error:'',message:''})}/>
-  {profile.user.mustChangePassword?<PasswordView onDone={()=>setProfile(null)} notify={notify}/>:page==='dashboard'&&canViewDashboard?<Dashboard profile={profile} notify={notify} onNavigate={navigate}/>:page==='categories'&&canViewCategories?<Categories profile={profile} notify={notify}/>:page==='suppliers'&&canViewSuppliers?<Suppliers profile={profile} notify={notify}/>:page==='products'&&canViewProducts?<Products profile={profile} notify={notify}/>:page==='discounts'&&canViewDiscounts?<Discounts profile={profile} notify={notify}/>:page==='vouchers'&&canViewVouchers?<Vouchers profile={profile} notify={notify}/>:page==='cash-shifts'&&canViewCashShifts?<CashShifts profile={profile} notify={notify}/>:page==='cash-drawer'&&canViewCashDrawer?<CashDrawer profile={profile} notify={notify}/>:page==='restaurant-tables'&&canViewRestaurantTables?<RestaurantTables profile={profile} notify={notify}/>:page==='inventory'&&canViewInventory?<Inventory profile={profile} notify={notify}/>:page==='staff-profiles'&&canViewStaff?<StaffProfiles profile={profile} notify={notify}/>:page==='attendances'&&canViewAttendances?<Attendances profile={profile} notify={notify}/>:page==='attendance-clock'&&canViewClock?<AttendanceClock profile={profile} notify={notify}/>:page==='leave-types'&&canViewLeaveTypes?<LeaveTypes profile={profile} notify={notify}/>:page==='leave-balances'&&canViewLeaveBalances?<LeaveBalances profile={profile} notify={notify}/>:page==='leave-requests'&&canViewLeaveRequests?<LeaveRequests profile={profile} notify={notify}/>:page==='payment-methods'&&canViewPayments?<PaymentMethods profile={profile} notify={notify}/>:page==='sst-settings'&&canViewSst?<SstSettings profile={profile} notify={notify}/>:page==='service-charge'&&canViewServiceCharge?<ServiceChargeSettings profile={profile} notify={notify}/>:page==='pos'&&canViewPos?<PosTerminal profile={profile} notify={notify}/>:hasView?<UsersView profile={profile} notify={notify} onAccountEmailChanged={()=>{setProfile(null);setSidebar(false);notify('Email changed. Sign in again using the new email.');}}/>:<main className="page"><h1>My Account</h1><p>Your account is active. User management requires explicit permission.</p><p>Login Email: {profile.user.email}</p><button className="outline" onClick={()=>setSelfEmailEdit(true)}>Change Email</button>{selfEmailEdit&&<EmailEditor original={{id:profile.user.id,email:profile.user.email,full_name:profile.user.fullName}} self={true} busy={selfEmailBusy} onCancel={()=>setSelfEmailEdit(false)} onSave={async data=>{setSelfEmailBusy(true);try{const result=await request(`/users/${profile.user.id}/email`,{method:'PATCH',body:data});setSelfEmailEdit(false);if(result.mustSignInAgain){setProfile(null);notify('Email changed. Sign in again using the new email.');}else notify('Email unchanged.');}catch(e){notify(e.message,true);}finally{setSelfEmailBusy(false);}}}/>}</main>}
+  {profile.user.mustChangePassword?<PasswordView onDone={()=>setProfile(null)} notify={notify}/>:page==='profile'?<MyProfile profile={profile} notify={notify} onSignInRequired={message=>{setProfile(null);setSidebar(false);setOpenNavGroups(null);setNotice({error:'',message});}}/>:page==='dashboard'&&canViewDashboard?<Dashboard profile={profile} notify={notify} onNavigate={navigate}/>:page==='categories'&&canViewCategories?<Categories profile={profile} notify={notify}/>:page==='suppliers'&&canViewSuppliers?<Suppliers profile={profile} notify={notify}/>:page==='products'&&canViewProducts?<Products profile={profile} notify={notify}/>:page==='discounts'&&canViewDiscounts?<Discounts profile={profile} notify={notify}/>:page==='vouchers'&&canViewVouchers?<Vouchers profile={profile} notify={notify}/>:page==='cash-shifts'&&canViewCashShifts?<CashShifts profile={profile} notify={notify}/>:page==='cash-drawer'&&canViewCashDrawer?<CashDrawer profile={profile} notify={notify}/>:page==='restaurant-tables'&&canViewRestaurantTables?<RestaurantTables profile={profile} notify={notify}/>:page==='inventory'&&canViewInventory?<Inventory profile={profile} notify={notify}/>:page==='staff-profiles'&&canViewStaff?<StaffProfiles profile={profile} notify={notify}/>:page==='attendances'&&canViewAttendances?<Attendances profile={profile} notify={notify}/>:page==='attendance-clock'&&canViewClock?<AttendanceClock profile={profile} notify={notify}/>:page==='leave-types'&&canViewLeaveTypes?<LeaveTypes profile={profile} notify={notify}/>:page==='leave-balances'&&canViewLeaveBalances?<LeaveBalances profile={profile} notify={notify}/>:page==='leave-requests'&&canViewLeaveRequests?<LeaveRequests profile={profile} notify={notify}/>:page==='payment-methods'&&canViewPayments?<PaymentMethods profile={profile} notify={notify}/>:page==='sst-settings'&&canViewSst?<SstSettings profile={profile} notify={notify}/>:page==='service-charge'&&canViewServiceCharge?<ServiceChargeSettings profile={profile} notify={notify}/>:page==='pos'&&canViewPos?<PosTerminal profile={profile} notify={notify}/>:hasView?<UsersView profile={profile} notify={notify} onAccountEmailChanged={()=>{setProfile(null);setSidebar(false);notify('Email changed. Sign in again using the new email.');}}/>:<main className="page"><h1>My Account</h1><p>Your account is active. User management requires explicit permission.</p><p>Login Email: {profile.user.email}</p><button className="outline" onClick={()=>setSelfEmailEdit(true)}>Change Email</button>{selfEmailEdit&&<EmailEditor original={{id:profile.user.id,email:profile.user.email,full_name:profile.user.fullName}} self={true} busy={selfEmailBusy} onCancel={()=>setSelfEmailEdit(false)} onSave={async data=>{setSelfEmailBusy(true);try{const result=await request(`/users/${profile.user.id}/email`,{method:'PATCH',body:data});setSelfEmailEdit(false);if(result.mustSignInAgain){setProfile(null);notify('Email changed. Sign in again using the new email.');}else notify('Email unchanged.');}catch(e){notify(e.message,true);}finally{setSelfEmailBusy(false);}}}/>}</main>}
  <footer className="app-footer">© 2026 TPOS V2 — MNII Alpha Ent</footer>
  </div></div>;
 }

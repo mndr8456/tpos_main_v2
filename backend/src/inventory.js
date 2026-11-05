@@ -1,7 +1,7 @@
 // Tenant-isolated physical inventory foundation. No sale, payment or GL posting.
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
-import {inventoryOpening} from './inventory-cost.js';
+import {inventoryOpening,inventoryReceive as inventoryReceiveBalance,quantity2,cost2,printQuantity,printCost,printValue,quantity2AllowZero} from './inventory-cost.js';
 const positiveId=z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const decimal2=z.string().regex(/^(?:0|[1-9]\d{0,15})(?:\.\d{1,2})?$/);
 
@@ -37,7 +37,8 @@ export async function inventoryBalances(req,res){
  if(query.productId){sql+=' AND v.product_id=?';params.push(query.productId);}
  sql+=' ORDER BY v.branch_id,p.product_name LIMIT 5000';
  const [rows]=await req.auth.pool.execute(sql,params);
- return res.set('Cache-Control','no-store').json({balances:rows.map(mapped),accountingPostingReady:false});
+ const canSeeValue=req.auth.user.permissions.includes('inventory.valuation.view');
+ return res.set('Cache-Control','no-store').json({balances:rows.map(row=>{const record=mapped(row);if(!canSeeValue){delete record.average_cost;delete record.carrying_value;}return record;}),accountingPostingReady:false});
 }
 export async function inventoryMovements(req,res){
  const query=listSchema.parse(req.query);
@@ -79,4 +80,36 @@ export async function openInventoryBalance(req,res){
   await conn.commit();
   return res.status(201).set('Cache-Control','no-store').json({message:'INVENTORY_PHYSICAL_OPENING_RECORDED',movementId:String(result.insertId),balance:opening,accountingPosted:false});
  }catch(e){await conn.rollback();if(e.code==='ER_DUP_ENTRY')throw bad('INVENTORY_OPENING_CONFLICT',409);if(e.code==='ER_LOCK_DEADLOCK'||e.code==='ER_LOCK_WAIT_TIMEOUT')throw bad('INVENTORY_CONCURRENT_WRITE_RETRY',409);throw e;}finally{conn.release();}
+}
+
+// Branch-scoped, idempotent physical receipt. Never posts accounting or changes
+// opening stock. Actual unit cost is mandatory for moving weighted average.
+export async function receiveInventory(req,res){
+ if(!req.auth.user.permissions.includes('inventory.receive'))throw bad('INVENTORY_RECEIVE_FORBIDDEN',403);
+ const data=openingSchema.parse(req.body);access(req,data.branchId);
+ const q=quantity2(data.quantity),unit=cost2(data.unitCost);
+ const quantity=printQuantity(q),unitCost=printCost(unit);
+ const digest=createHash('sha256').update(JSON.stringify({kind:'RECEIPT',branchId:data.branchId,productId:data.productId,quantity,unitCost,reference:data.reference,actor:String(req.auth.user.id)})).digest('hex');
+ const conn=await req.auth.pool.getConnection();
+ try{
+  await conn.beginTransaction();
+  const [[previous]]=await conn.execute("SELECT id,request_hash,branch_id,product_id,actor_user_id,movement_type FROM inventory_movements WHERE request_key=?",[data.requestKey]);
+  if(previous){
+   if(previous.movement_type!=='RECEIPT'||previous.request_hash!==digest||String(previous.actor_user_id)!==String(req.auth.user.id)||String(previous.branch_id)!==String(data.branchId)||String(previous.product_id)!==String(data.productId))throw bad('INVENTORY_REQUEST_KEY_REUSED',409);
+   await conn.commit();return res.set('Cache-Control','no-store').json({message:'INVENTORY_RECEIPT_ALREADY_RECORDED',movementId:String(previous.id),idempotent:true});
+  }
+  const [[branch]]=await conn.execute('SELECT id FROM branches WHERE id=? AND is_active=1 FOR UPDATE',[data.branchId]);
+  if(!branch)throw bad('INVENTORY_BRANCH_NOT_ACTIVE',409);
+  const [[product]]=await conn.execute('SELECT id,product_type,product_structure,track_stock,status,is_deleted FROM products WHERE id=? FOR UPDATE',[data.productId]);
+  if(!product||product.status!=='ACTIVE'||product.is_deleted||!product.track_stock||product.product_type!=='GOODS'||product.product_structure!=='SINGLE')throw bad('INVENTORY_PRODUCT_NOT_STOCKABLE',409);
+  const [[balance]]=await conn.execute('SELECT quantity_on_hand,carrying_value,average_cost FROM inventory_branch_balances WHERE branch_id=? AND product_id=? FOR UPDATE',[data.branchId,data.productId]);
+  if(!balance)throw bad('INVENTORY_OPENING_REQUIRED',409);
+  const after=inventoryReceiveBalance({quantity:String(balance.quantity_on_hand),carryingValue:String(balance.carrying_value)},quantity,unitCost);
+  const deltaValue=printValue(quantity2AllowZero(after.carryingValue)-quantity2AllowZero(String(balance.carrying_value)));
+  await conn.execute('UPDATE inventory_branch_balances SET quantity_on_hand=?,carrying_value=?,average_cost=?,version=version+1 WHERE branch_id=? AND product_id=?',[after.quantity,after.carryingValue,after.averageCost,data.branchId,data.productId]);
+  const [movement]=await conn.execute("INSERT INTO inventory_movements(request_key,request_hash,branch_id,product_id,movement_type,quantity_delta,value_delta,quantity_after,carrying_value_after,average_cost_after,reference,actor_user_id) VALUES(?,?,?,?,'RECEIPT',?,?,?,?,?,?,?)",[data.requestKey,digest,data.branchId,data.productId,quantity,deltaValue,after.quantity,after.carryingValue,after.averageCost,data.reference,req.auth.user.id]);
+  await conn.commit();
+  return res.status(201).set('Cache-Control','no-store').json({message:'INVENTORY_RECEIPT_RECORDED',movementId:String(movement.insertId),accountingPosted:false});
+ }catch(e){await conn.rollback();if(e.code==='ER_DUP_ENTRY')throw bad('INVENTORY_RECEIPT_CONFLICT_RETRY',409);if(e.code==='ER_LOCK_DEADLOCK'||e.code==='ER_LOCK_WAIT_TIMEOUT')throw bad('INVENTORY_CONCURRENT_WRITE_RETRY',409);throw e;}
+ finally{conn.release();}
 }

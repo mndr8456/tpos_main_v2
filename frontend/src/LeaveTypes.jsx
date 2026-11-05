@@ -4,7 +4,7 @@ import {request,apiUrl} from './api.js';
 import {refreshPage} from './refresh-page.js';
 import {createLeaveTypesPdf,downloadLeaveTypesPdf} from './leave-types-pdf.js';
 import './LeaveTypes.css';
-const attendanceStatuses=['Annual Leave','Medical Leave','Unpaid Leave'];
+const attendanceStatuses=['Annual Leave','Medical Leave','Unpaid Leave','Emergency Leave'];
 const leaveStatus=['active','inactive'];
 const blank={leave_code:'',leave_name:'',description:'',attendance_status:'Annual Leave',default_entitlement_days:'0.00',is_paid:'1',requires_attachment:'0',allow_half_day:'1',allow_carry_forward:'0',max_carry_forward_days:'0.00',max_days_per_request:'',minimum_service_months:'0',gender_restriction:'All',sort_order:'0',status:'active'};
 const fields=[

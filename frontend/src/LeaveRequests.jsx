@@ -3,7 +3,8 @@ import {Search,RefreshCw,FileDown,Plus,Eye,Pencil,CheckCheck,XCircle,Ban,History
 import {request,apiUrl} from './api.js';
 import {createLeaveRequestsPdf,downloadLeaveRequestsPdf} from './leave-requests-pdf.js';
 import {refreshPage} from './refresh-page.js';
-import {approvalBlocker,approvalErrorMessage} from './leave-request-approval.js';
+import {approvalBlocker,approvalScheduleNotice,approvalErrorMessage} from './leave-request-approval.js';
+import {validReviewDetails,formatLeaveAuditDetails} from './leave-request-review.js';
 import './LeaveRequests.css';
 const fmt=v=>Number(v||0).toFixed(2);
 const localDate=s=>s?`${s.slice(8,10)}/${s.slice(5,7)}/${s.slice(0,4)}`:'—';
@@ -49,13 +50,29 @@ function ViewRequest({details,canApprove,onClose,onReview,onRecheck,onCancel,onA
  const items=[['Staff',`${r.staff_no} — ${r.full_name}`],['Leave Type',`${r.leave_code} — ${r.leave_name}`],['Start Date',localDate(r.start_date)],['End Date',localDate(r.end_date)],['Duration',`${r.duration_type}${r.half_day_period?' · '+r.half_day_period:''}`],['Requested',`${fmt(r.total_days)} days`],['Remaining Balance',r.balance_remaining_days===null?'Not deducted':`${fmt(r.balance_remaining_days)} days`],['Request Status',r.request_status],['Attendance Check',details.attendanceCheck||'Rechecked on approval']];
  return <div className="overlay"><div className="dialog wide lr-dialog"><p className="eyebrow">HR / LEAVE REQUESTS</p><h2>View Leave Request</h2><p className="muted">{r.request_no} · {r.staff_no} · {r.full_name}</p><div className="lr-view-grid">{items.map(([label,value])=><div key={label}><span>{label}</span><b>{value}</b></div>)}</div>
  {r.request_status==='Pending'&&blocker&&<div className="lr-approval-blocker" role="alert"><strong>Approval requires Attendance review</strong><p>{blocker}</p><small>Period: {localDate(r.start_date)}{r.end_date!==r.start_date?` – ${localDate(r.end_date)}`:''}. This request remains Pending; no leave balance or attendance has been posted by this attempt.</small></div>}
+ {r.request_status==='Pending'&&details.attendanceState==='SCHEDULE_ONLY'&&<div className="lr-approval-schedule" role="status"><strong>Attendance schedule without punches · OWNER / ADMIN / HR confirmation</strong><p>{approvalScheduleNotice(details.attendanceState,details.scheduleConversionCount||0)}</p><small>Approve will link the existing scheduled attendance; it will not delete clock punches or create a duplicate session.</small></div>}
  <section className="lr-section"><h3>Reason</h3><p>{r.reason}</p>{r.handover_notes&&<p><b>Handover:</b> {r.handover_notes}</p>}{r.review_remarks&&<p><b>Review Remarks:</b> {r.review_remarks}</p>}{r.cancel_reason&&<p><b>Cancellation Reason:</b> {r.cancel_reason}</p>}</section><section className="lr-section"><h3>Attachments ({details.attachments.length})</h3>{details.attachments.length?details.attachments.map(a=><a className="lr-attachment" key={a.id} href={apiUrl(`/leave-requests/${r.id}/attachments/${a.id}`)}><Paperclip size={16}/> {a.file_name} · {a.attachment_type}</a>):<p className="muted">None</p>}</section>
- <div className="dialog-actions"><button type="button" className="outline" onClick={onAudit} disabled={busy}><History size={16}/> Activity Log</button><button type="button" className="outline" onClick={onClose} disabled={busy}>Close</button>{r.request_status==='Pending'&&<>{icon('Cancel Pending Request',Ban,onCancel,busy)}{canApprove&&<><button type="button" className="outline" onClick={onRecheck} disabled={busy}><RefreshCw size={16}/> Recheck Attendance</button>{icon('Reject Leave Request',XCircle,()=>onReview('Rejected'),busy)}<button type="button" className="primary" onClick={()=>onReview('Approved')} disabled={busy||Boolean(blocker)} title={blocker||'Approve Leave Request'}><CheckCheck size={16}/> Approve</button></>}</>}</div>
+ <div className="dialog-actions"><button type="button" className="outline" onClick={onAudit} disabled={busy}><History size={16}/> Activity Log</button><button type="button" className="outline" onClick={onClose} disabled={busy}>Close</button>{r.request_status==='Pending'&&<>{icon('Cancel Pending Request',Ban,onCancel,busy)}{canApprove&&<><button type="button" className="outline" onClick={onRecheck} disabled={busy}><RefreshCw size={16}/> Recheck Attendance</button>{icon('Reject Leave Request',XCircle,()=>onReview('Rejected'),busy)}<button type="button" className="primary" onClick={()=>onReview('Approved')} disabled={busy} title={blocker||'Approve Leave Request'}><CheckCheck size={16}/> Approve</button></>}</>}</div>
  </div></div>;
 }
+function ReviewDecisionModal({review,busy,onDetails,onClose,onSubmit}){
+ const approve=review.decision==='Approved',allowed=validReviewDetails(review.remarks);
+ const scheduleCount=review.attendanceState==='SCHEDULE_ONLY'?review.scheduleConversionCount:0;
+ const confirm=e=>{e.preventDefault();if(!busy&&allowed)onSubmit();};
+ return <div className="overlay"><form className="dialog lr-review-dialog" onSubmit={confirm} role="dialog" aria-modal="true" aria-labelledby="lr-review-title">
+  <p className="eyebrow">HR / LEAVE REQUESTS</p>
+  <h2 id="lr-review-title">{approve?'Approve Leave Request':'Reject Leave Request'}</h2>
+  <p className="lr-review-identity"><b>{review.row.request_no}</b> · {review.row.staff_no} · {review.row.full_name}</p>
+  <p className="lr-review-summary">{approve?'Confirm this leave and record your approval details.':'Record the reason for rejecting this leave request.'}</p>
+  {approve&&scheduleCount>0&&<div className="lr-review-schedule" role="status">{scheduleCount} scheduled Attendance {scheduleCount===1?'record':'records'} will be marked as Leave.</div>}
+  <Field label={approve?'Approval Details *':'Rejection Details *'}><textarea autoFocus rows={4} required minLength={4} maxLength={5000} disabled={busy} value={review.remarks} onChange={e=>onDetails(e.target.value)} placeholder={approve?'Enter the reason for approval...':'Enter the reason for rejection...'}/></Field>
+  <div className="lr-review-footnote"><span>Required · Minimum 4 characters · Saved in Activity Log</span><span>{review.remarks.length}/5000</span></div>
+  <div className="dialog-actions"><button type="button" className="outline" disabled={busy} onClick={onClose}>Cancel</button><button type="submit" className={approve?'primary':'lr-review-reject'} disabled={busy||!allowed}>{approve?<CheckCheck size={16}/>:<XCircle size={16}/>} {busy?'Saving...':approve?'Approve':'Reject'}</button></div>
+ </form></div>;
+}
 export default function LeaveRequests({profile,notify}){
- const perms=profile.user.permissions,canManage=perms.includes('leave_requests.manage'),canApprove=perms.includes('leave_requests.approve'),canExport=perms.includes('leave_requests.export'),canCreate=canManage||perms.includes('leave_requests.self');
- const [records,setRecords]=useState([]),[meta,setMeta]=useState({staff:[],leaveTypes:[],balances:[]}),[loading,setLoading]=useState(false),[busy,setBusy]=useState(false),[form,setForm]=useState(null),[view,setView]=useState(null),[activity,setActivity]=useState(null);
+ const perms=profile.user.permissions,canManage=perms.includes('leave_requests.manage'),canApprove=['OWNER','ADMIN','HR'].includes(String(profile.user.role||'').toUpperCase())&&perms.includes('leave_requests.approve'),canExport=perms.includes('leave_requests.export'),canCreate=canManage||perms.includes('leave_requests.self');
+ const [records,setRecords]=useState([]),[meta,setMeta]=useState({staff:[],leaveTypes:[],balances:[]}),[loading,setLoading]=useState(false),[busy,setBusy]=useState(false),[form,setForm]=useState(null),[view,setView]=useState(null),[activity,setActivity]=useState(null),[review,setReview]=useState(null);
  const [search,setSearch]=useState(''),[staff,setStaff]=useState(''),[leaveType,setLeaveType]=useState(''),[status,setStatus]=useState(''),[year,setYear]=useState(String(new Date().getFullYear())),[department,setDepartment]=useState(''),[dateFrom,setDateFrom]=useState(''),[dateTo,setDateTo]=useState(''),[limit,setLimit]=useState('100');
  const load=useCallback(async()=>{setLoading(true);try{const [rows,lookup]=await Promise.all([request('/leave-requests?limit=1000'),request('/leave-requests/meta')]);setRecords(rows.items||[]);setMeta(lookup);return true;}catch(e){notify(e.message,true);return false;}finally{setLoading(false);}},[notify]);
  useEffect(()=>{load();},[load]);
@@ -67,19 +84,22 @@ export default function LeaveRequests({profile,notify}){
  const openDetails=async(row,mode)=>{try{const data=await request(`/leave-requests/${row.id}`);if(mode==='edit')setForm({mode:'edit',item:{...data.item,attachments:data.attachments}});else setView(data);}catch(e){notify(e.message,true);}};
  const save=async(body,id)=>{setBusy(true);try{await request(id?`/leave-requests/${id}`:'/leave-requests',{method:id?'PUT':'POST',body});setForm(null);notify(id?'Leave Request updated.':'Leave Request submitted.');await load();}catch(e){notify(e.message,true);}finally{setBusy(false);}};
  const recheckAttendance=async row=>{setBusy(true);try{const fresh=await request(`/leave-requests/${row.id}`);setView(fresh);notify('');}catch(e){notify(approvalErrorMessage(e),true);}finally{setBusy(false);}};
- const act=async(row,decision)=>{let remarks='';if(decision==='Rejected'){remarks=window.prompt('Review Remarks (required):')??'';if(!remarks.trim())return;}
- setBusy(true);try{
-  if(decision==='Approved'){
-   // Read-only preflight: display the attendance blocker before confirmation.
-   // The server still locks and rechecks the same requested dates inside the write transaction.
-   const latest=await request(`/leave-requests/${row.id}`);
-   if(latest.item.request_status!=='Pending'){setView(latest);await load();notify('This request is no longer Pending. Refresh to see its final status.',true);return;}
-   if(approvalBlocker(latest.attendanceState)){setView(latest);notify('');return;}
-   if(!window.confirm(`Approve ${row.request_no}? This posts Used Days and creates Leave Attendances.`))return;
-  }
-  await request(`/leave-requests/${row.id}/review`,{method:'POST',body:{decision,remarks}});
-  setView(null);await load();notify(`Leave Request ${decision.toLowerCase()}.`);
+ // Fresh preflight before opening the approval/rejection form. The backend
+ // revalidates status, Attendance and policy under row locks when confirming.
+ const openReview=async(row,decision)=>{if(busy)return;setBusy(true);try{
+  const latest=await request(`/leave-requests/${row.id}`);
+  if(latest.item.request_status!=='Pending'){setView(latest);await load();notify('This request is no longer Pending. Refresh to see its final status.',true);return;}
+  if(decision==='Approved'&&approvalBlocker(latest.attendanceState)){setView(latest);notify(approvalBlocker(latest.attendanceState),true);return;}
+  setReview({row:latest.item,decision,remarks:'',attendanceState:latest.attendanceState,scheduleConversionCount:Number(latest.scheduleConversionCount||0)});
+  setView(null);
  }catch(e){notify(approvalErrorMessage(e),true);}finally{setBusy(false);}};
+ const submitReview=async()=>{if(!review||busy||!validReviewDetails(review.remarks))return;
+  const {row,decision,remarks,attendanceState}=review;
+  setBusy(true);try{
+   await request(`/leave-requests/${row.id}/review`,{method:'POST',body:{decision,remarks:remarks.trim(),allow_schedule_conversion:decision==='Approved'&&attendanceState==='SCHEDULE_ONLY'}});
+   setReview(null);setView(null);await load();notify(`Leave Request ${decision.toLowerCase()}.`);
+  }catch(e){notify(approvalErrorMessage(e),true);}finally{setBusy(false);}
+ };
  const cancel=async row=>{const reason=window.prompt('Cancellation reason (required):');if(reason===null)return;setBusy(true);try{await request(`/leave-requests/${row.id}/cancel`,{method:'POST',body:{reason}});setView(null);await load();notify('Leave Request cancelled.');}catch(e){notify(e.message,true);}finally{setBusy(false);}};
  const audit=async row=>{try{const response=await request(`/leave-requests/${row.id}/audit`);setView(null);setActivity({row,logs:response.logs||[]});}catch(e){notify(e.message,true);}};
  const pdf=async()=>{setBusy(true);try{const blob=await createLeaveRequestsPdf(visible,{businessName:profile.business?.name||'TPOS V2'});downloadLeaveRequestsPdf(blob);}catch(e){notify(e.message,true);}finally{setBusy(false);}};
@@ -95,9 +115,10 @@ export default function LeaveRequests({profile,notify}){
  <select value={department} onChange={e=>setDepartment(e.target.value)} aria-label="Department Filter"><option value="">All Departments</option>{departments.map(x=><option key={x}>{x}</option>)}</select>
  <Field label="Date From"><input aria-label="Date From" type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></Field><Field label="Date To"><input aria-label="Date To" type="date" min={dateFrom||undefined} value={dateTo} onChange={e=>setDateTo(e.target.value)}/></Field>
  <select value={limit} onChange={e=>setLimit(e.target.value)} aria-label="Rows Filter">{[25,50,100,200,500,1000].map(x=><option key={x} value={x}>{x} rows</option>)}</select></div>
- <div className="table-scroll"><table className="lr-table"><thead><tr>{['Request','Staff','Leave Type','Leave Period','Days','Status','Balance','Attachments','Actions'].map(x=><th key={x}>{x}</th>)}</tr></thead><tbody>{visible.map(r=><tr key={r.id}><td><b>{r.request_no}</b><small>{r.submitted_at?.slice(0,19)}</small></td><td><b>{r.full_name}</b><small>{r.staff_no}</small></td><td><b>{r.leave_code}</b><small>{r.leave_name}</small></td><td>{localDate(r.start_date)}{r.start_date!==r.end_date?' – '+localDate(r.end_date):''}</td><td className="lr-number">{fmt(r.total_days)}</td><td><span className={`lr-status lr-${r.request_status.toLowerCase()}`}>{r.request_status}</span></td><td className="lr-number">{r.balance_remaining_days===null?'—':fmt(r.balance_remaining_days)}</td><td className="lr-number">{r.attachment_count}</td><td><div className="row-actions">{icon('View Leave Request',Eye,()=>openDetails(r,'view'))}{mayEdit(r)&&icon('Edit Pending Request',Pencil,()=>openDetails(r,'edit'))}{mayCancel(r)&&icon('Cancel Pending Request',Ban,()=>cancel(r))}{canApprove&&r.request_status==='Pending'&&<>{icon('Approve Leave Request',CheckCheck,()=>act(r,'Approved'))}{icon('Reject Leave Request',XCircle,()=>act(r,'Rejected'))}</>}{icon('Leave Request Activity Log',History,()=>audit(r))}</div></td></tr>)}{!visible.length&&<tr><td colSpan={9} className="empty">No Leave Requests match the selected filters.</td></tr>}</tbody></table></div></div>
+ <div className="table-scroll"><table className="lr-table"><thead><tr>{['Request','Staff','Leave Type','Leave Period','Days','Status','Balance','Attachments','Actions'].map(x=><th key={x}>{x}</th>)}</tr></thead><tbody>{visible.map(r=><tr key={r.id}><td><b>{r.request_no}</b><small>{r.submitted_at?.slice(0,19)}</small></td><td><b>{r.full_name}</b><small>{r.staff_no}</small></td><td><b>{r.leave_code}</b><small>{r.leave_name}</small></td><td>{localDate(r.start_date)}{r.start_date!==r.end_date?' – '+localDate(r.end_date):''}</td><td className="lr-number">{fmt(r.total_days)}</td><td><span className={`lr-status lr-${r.request_status.toLowerCase()}`}>{r.request_status}</span></td><td className="lr-number">{r.balance_remaining_days===null?'—':fmt(r.balance_remaining_days)}</td><td className="lr-number">{r.attachment_count}</td><td><div className="row-actions">{icon('View Leave Request',Eye,()=>openDetails(r,'view'))}{mayEdit(r)&&icon('Edit Pending Request',Pencil,()=>openDetails(r,'edit'))}{mayCancel(r)&&icon('Cancel Pending Request',Ban,()=>cancel(r))}{canApprove&&r.request_status==='Pending'&&<>{icon('Approve Leave Request',CheckCheck,()=>openReview(r,'Approved'))}{icon('Reject Leave Request',XCircle,()=>openReview(r,'Rejected'))}</>}{icon('Leave Request Activity Log',History,()=>audit(r))}</div></td></tr>)}{!visible.length&&<tr><td colSpan={9} className="empty">No Leave Requests match the selected filters.</td></tr>}</tbody></table></div></div>
  {form&&<LeaveForm key={`${form.mode}-${form.item?.id||'new'}`} mode={form.mode} item={form.item} meta={meta} onClose={()=>setForm(null)} onSave={save} busy={busy} notify={notify}/>}
- {view&&<ViewRequest details={view} canApprove={canApprove} onClose={()=>setView(null)} onReview={decision=>act(view.item,decision)} onRecheck={()=>recheckAttendance(view.item)} onCancel={()=>cancel(view.item)} onAudit={()=>audit(view.item)} busy={busy}/>}
- {activity&&<div className="overlay"><div className="dialog wide lr-dialog"><p className="eyebrow">HR / AUDIT</p><h2>Leave Request Activity Log — {activity.row.request_no}</h2><div className="table-scroll"><table><thead><tr>{['Date','Action','Actor','Details'].map(x=><th key={x}>{x}</th>)}</tr></thead><tbody>{activity.logs.map(l=><tr key={l.id}><td>{l.recorded_at}</td><td>{l.action_type}</td><td>{l.actor_name}</td><td>{l.details?.remarks||l.details?.reason||'—'}</td></tr>)}{!activity.logs.length&&<tr><td colSpan={4}>No activity recorded.</td></tr>}</tbody></table></div><div className="dialog-actions"><button className="outline" onClick={()=>setActivity(null)}>Close</button></div></div></div>}
+ {view&&<ViewRequest details={view} canApprove={canApprove} onClose={()=>setView(null)} onReview={decision=>openReview(view.item,decision)} onRecheck={()=>recheckAttendance(view.item)} onCancel={()=>cancel(view.item)} onAudit={()=>audit(view.item)} busy={busy}/>}
+ {review&&<ReviewDecisionModal review={review} busy={busy} onDetails={remarks=>setReview(r=>r?{...r,remarks}:r)} onClose={()=>setReview(null)} onSubmit={submitReview}/>}
+ {activity&&<div className="overlay"><div className="dialog wide lr-dialog"><p className="eyebrow">HR / AUDIT</p><h2>Leave Request Activity Log — {activity.row.request_no}</h2><div className="table-scroll"><table><thead><tr>{['Date','Action','Actor','Details'].map(x=><th key={x}>{x}</th>)}</tr></thead><tbody>{activity.logs.map(l=><tr key={l.id}><td>{l.recorded_at}</td><td>{l.action_type}</td><td>{l.actor_name}</td><td className="lr-audit-details">{formatLeaveAuditDetails(l.action_type,l.details)}</td></tr>)}{!activity.logs.length&&<tr><td colSpan={4}>No activity recorded.</td></tr>}</tbody></table></div><div className="dialog-actions"><button className="outline" onClick={()=>setActivity(null)}>Close</button></div></div></div>}
  </main>;
 }

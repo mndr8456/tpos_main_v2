@@ -2,6 +2,7 @@
 import {z} from 'zod';
 import {fail,requestInput,leavePeriod,dayCents,centsDays,validateAttachments} from './leave-request-rules.js';
 import {calculateBalanceDelta,reconcileBalance} from './leave-request-engine.js';
+import {assessLeaveAttendance,leaveAttendanceSelect} from './leave-request-attendance.js';
 const privileged=new Set(['OWNER','ADMIN','HR']);
 const viewer=new Set([...privileged,'MANAGER']);
 const id=z.coerce.number().int().positive();
@@ -115,12 +116,12 @@ export async function requestList(req,res){access(req,'view');const f=z.object({
 export async function requestDetail(req,res){access(req,'view');const requestId=id.parse(req.params.id);const [[r]]=await req.auth.pool.execute(`SELECT ${select} ${joins} WHERE r.id=?`,[requestId]);if(!r)fail('LEAVE_REQUEST_NOT_FOUND',404);
  if(!viewer.has(role(req))){await staff(req.auth.pool,req,r.staff_profile_id,false,true);}
  const [attachments]=await req.auth.pool.execute('SELECT id,file_name,mime_type,file_bytes,attachment_type,DATE_FORMAT(created_at,\'%Y-%m-%d %H:%i\') AS created_at FROM hr_leave_request_attachments WHERE leave_request_id=? AND is_removed=0 ORDER BY id',[requestId]);
- // The approved V1 rule checks attendance on the requested leave dates only.
- // An unrelated historical open punch must not block a different leave period.
- const [[status]]=await req.auth.pool.execute(`SELECT COUNT(*) AS recorded,COALESCE(SUM(clock_in IS NOT NULL AND clock_out IS NULL),0) AS open_punches FROM hr_attendances WHERE staff_profile_id=? AND attendance_date BETWEEN ? AND ?`,[r.staff_profile_id,r.start_date,r.end_date]);
- const attendanceState=r.request_status==='Approved'?'POSTED':Number(status.open_punches)?'OPEN_PUNCH':Number(status.recorded)?'EXISTING_ATTENDANCE':'CLEAR';
- const attendanceCheck=({POSTED:'Leave attendance created',OPEN_PUNCH:'Unclosed Clock In',EXISTING_ATTENDANCE:'Existing attendance requires HR review',CLEAR:'No conflicting punches'})[attendanceState];
- res.set('Cache-Control','no-store').json({item:publicRow(r),attachments:attachments.map(x=>({...x,id:String(x.id)})),attendanceCheck,attendanceState});
+ // Only the requested period is checked. Pending work schedules are not actual punches.
+ const [attendance]=await req.auth.pool.execute(leaveAttendanceSelect,[r.staff_profile_id,r.start_date,r.end_date]);
+ const attendanceState=r.request_status==='Approved'?'POSTED':assessLeaveAttendance(attendance,r.duration_type);
+ const attendanceCheck=({POSTED:'Leave attendance created',OPEN_PUNCH:'Unclosed Clock In',EXISTING_ATTENDANCE:'Protected Attendance requires authorized review',HALF_DAY_SCHEDULE_REQUIRES_HR_REVIEW:'Half-day schedule requires authorized review',SCHEDULE_ONLY:'Work schedule without recorded punches · approval permitted',CLEAR:'No conflicting punches'})[attendanceState];
+ const scheduleConversionCount=attendanceState==='SCHEDULE_ONLY'?attendance.length:0;
+ res.set('Cache-Control','no-store').json({item:publicRow(r),attachments:attachments.map(x=>({...x,id:String(x.id)})),attendanceCheck,attendanceState,scheduleConversionCount});
 }
 export async function requestCreate(req,res){access(req,'self');const requestId=await tx(req.auth.pool,c=>submit(c,req,req.body));res.status(201).json({message:'LEAVE_REQUEST_SUBMITTED',id:String(requestId)});}
 export async function requestEdit(req,res){access(req,'self');const requestId=id.parse(req.params.id);await tx(req.auth.pool,async c=>{
@@ -140,7 +141,7 @@ export async function requestEdit(req,res){access(req,'self');const requestId=id
  await c.execute(`UPDATE hr_leave_requests SET leave_type_id=?,balance_year=?,start_date=?,end_date=?,duration_type=?,half_day_period=?,total_days=?,reason=?,emergency_contact_no=?,handover_notes=? WHERE id=?`,[input.leave_type_id,period.year,input.start_date,input.end_date,input.duration_type,input.half_day_period||null,period.days,input.reason,input.emergency_contact_no||null,input.handover_notes||null,requestId]);
  await note(c,req,requestId,'EDIT',{before:{type:r.leave_type_id,year:r.balance_year,days:r.total_days},after:{type:input.leave_type_id,year:period.year,days:period.days}});
  });res.json({message:'LEAVE_REQUEST_UPDATED'});}
-export async function requestReview(req,res){access(req,'approve');const requestId=id.parse(req.params.id),data=z.object({decision:z.enum(['Approved','Rejected']),remarks:z.string().trim().max(5000).default('')}).strict().parse(req.body);
+export async function requestReview(req,res){access(req,'approve');const requestId=id.parse(req.params.id),data=z.object({decision:z.enum(['Approved','Rejected']),remarks:z.string().trim().min(4).max(5000),allow_schedule_conversion:z.boolean().optional().default(false)}).strict().parse(req.body);
  if(data.decision==='Rejected'&&data.remarks.length<4)fail('REVIEW_REMARKS_REQUIRED',422);
  await tx(req.auth.pool,async c=>{
  const {r}=await lockRequest(c,req,requestId);if(r.request_status!=='Pending')fail('LEAVE_REQUEST_DECISION_ALREADY_FINAL',409);
@@ -151,21 +152,41 @@ export async function requestReview(req,res){access(req,'approve');const request
  const balance=await lockBalance(c,r.staff_profile_id,r.leave_type_id,r.balance_year,paid,{release:data.decision==='Rejected'});
  if(data.decision==='Approved'){
   const period=leavePeriod(r.start_date instanceof Date?r.start_date.toISOString().slice(0,10):String(r.start_date),r.end_date instanceof Date?r.end_date.toISOString().slice(0,10):String(r.end_date),r.duration_type,r.half_day_period);
-  // Any pre-existing attendance, including completed work, must be reviewed first; never overwrite punches.
-  const [conflicts]=await c.execute('SELECT id,clock_in,clock_out,attendance_source FROM hr_attendances WHERE staff_profile_id=? AND attendance_date BETWEEN ? AND ? FOR UPDATE',[r.staff_profile_id,period.dates[0],period.dates.at(-1)]);
-  if(conflicts.some(x=>x.clock_in&&!x.clock_out))fail('UNCLOSED_CLOCK_PUNCH',409);
-  if(conflicts.length)fail('EXISTING_ATTENDANCE_REQUIRES_HR_REVIEW',409);
+  // Lock all Attendance rows for exactly the requested leave period. An already
+  // finalized/clocked attendance cannot be converted or overwritten.
+  const [conflicts]=await c.execute(`${leaveAttendanceSelect} FOR UPDATE`,[r.staff_profile_id,period.dates[0],period.dates.at(-1)]);
+  const attendanceState=assessLeaveAttendance(conflicts,r.duration_type);
+  if(attendanceState==='OPEN_PUNCH')fail('UNCLOSED_CLOCK_PUNCH',409);
+  if(attendanceState==='HALF_DAY_SCHEDULE_REQUIRES_HR_REVIEW')fail('HALF_DAY_SCHEDULE_REQUIRES_HR_REVIEW',409);
+  if(attendanceState==='EXISTING_ATTENDANCE')fail('EXISTING_ATTENDANCE_REQUIRES_HR_REVIEW',409);
+  if(attendanceState==='SCHEDULE_ONLY'&&!data.allow_schedule_conversion)fail('SCHEDULE_CONVERSION_CONFIRMATION_REQUIRED',409);
   if(Number(policy.requires_attachment)){
    const [[mc]]=await c.execute(`SELECT COUNT(*) AS n FROM hr_leave_request_attachments WHERE leave_request_id=? AND (attachment_type='Medical Certificate' OR ?<>'MC') AND is_removed=0`,[requestId,policy.leave_code]);if(!Number(mc.n))fail('REQUIRED_SUPPORTING_DOCUMENT_MISSING',422);
   }
-  // Leave rows deliberately keep clock punch fields NULL. Attendance source is immutable to manual API.
-  for(const date of period.dates){const [insert]=await c.execute(`INSERT INTO hr_attendances(staff_profile_id,attendance_date,session_no,attendance_status,attendance_source,approval_status,approved_by_user_id,approved_at,leave_request_id,created_by_user_id,updated_by_user_id) VALUES(?,?,1,?,'Leave','Approved',?,NOW(6),?,?,?)`,[r.staff_profile_id,date,r.duration_type==='Half Day'?'Half Day':policy.attendance_status,req.auth.user.id,requestId,req.auth.user.id,req.auth.user.id]);
-   await c.execute('INSERT INTO hr_attendance_audit_logs(attendance_id,actor_user_id,action_type,details) VALUES(?,?,\'CREATE\',?)',[insert.insertId,req.auth.user.id,JSON.stringify({source:'Leave',leaveRequestId:requestId})]);
+  // The same locked transaction creates a Leave record OR converts one
+  // explicitly reviewed, unpunched Pending session. Never erase clock history.
+  const scheduledByDate=new Map();
+  for(const row of conflicts){const list=scheduledByDate.get(row.attendance_date)||[];list.push(row);scheduledByDate.set(row.attendance_date,list);}
+  for(const date of period.dates){
+   const existingRows=scheduledByDate.get(date)||[];
+   const leaveStatus=r.duration_type==='Half Day'?'Half Day':policy.attendance_status;
+   if(existingRows.length){
+    for(const existing of existingRows){
+     // An unpunched shift can be superseded by approved absence even if the
+     // roster was administratively approved. Never require Clock In/Out for EL/UL/MC.
+     const [changed]=await c.execute(`UPDATE hr_attendances SET attendance_status=?,attendance_source='Leave',break_minutes=0,approval_status='Approved',approved_by_user_id=?,approved_at=NOW(6),leave_request_id=?,updated_by_user_id=? WHERE id=? AND staff_profile_id=? AND status='active' AND approval_status IN ('Pending','Approved') AND attendance_source IN ('Manual','Import') AND clock_in IS NULL AND clock_out IS NULL AND leave_request_id IS NULL`,[leaveStatus,req.auth.user.id,requestId,req.auth.user.id,existing.id,r.staff_profile_id]);
+     if(changed.affectedRows!==1)fail('ATTENDANCE_SCHEDULE_CHANGED_RECHECK',409);
+     await c.execute(`INSERT INTO hr_attendance_audit_logs(attendance_id,actor_user_id,action_type,details) VALUES(?,?,'UPDATE',?)`,[existing.id,req.auth.user.id,JSON.stringify({source:'Leave',leaveRequestId:requestId,reviewedScheduleConversion:true,leaveCode:policy.leave_code,previous:{attendanceStatus:existing.attendance_status,attendanceSource:existing.attendance_source,approvalStatus:existing.approval_status,approvedAt:existing.approved_at,approvedByUserId:existing.approved_by_user_id,scheduledClockIn:existing.scheduled_clock_in,scheduledClockOut:existing.scheduled_clock_out,clockInNotes:existing.clock_in_notes,clockOutNotes:existing.clock_out_notes,breakMinutes:existing.break_minutes,sessionNo:existing.session_no},noPunchesVerified:true})]);
+    }
+   }else{
+    const [insert]=await c.execute(`INSERT INTO hr_attendances(staff_profile_id,attendance_date,session_no,attendance_status,attendance_source,approval_status,approved_by_user_id,approved_at,leave_request_id,created_by_user_id,updated_by_user_id) VALUES(?,?,1,?,'Leave','Approved',?,NOW(6),?,?,?)`,[r.staff_profile_id,date,leaveStatus,req.auth.user.id,requestId,req.auth.user.id,req.auth.user.id]);
+    await c.execute(`INSERT INTO hr_attendance_audit_logs(attendance_id,actor_user_id,action_type,details) VALUES(?,?,'CREATE',?)`,[insert.insertId,req.auth.user.id,JSON.stringify({source:'Leave',leaveRequestId:requestId,leaveCode:policy.leave_code})]);
+   }
   }
   if(paid)await post(c,req,requestId,balance,'APPROVE',dayCents(r.total_days),-dayCents(r.total_days));
  }else if(paid)await post(c,req,requestId,balance,'REJECT',0,-dayCents(r.total_days));
  await c.execute('UPDATE hr_leave_requests SET request_status=?,reviewed_by_user_id=?,reviewed_at=NOW(6),review_remarks=? WHERE id=?',[data.decision,req.auth.user.id,data.remarks||null,requestId]);
- await note(c,req,requestId,data.decision==='Approved'?'APPROVE':'REJECT',{remarks:data.remarks});
+ await note(c,req,requestId,data.decision==='Approved'?'APPROVE':'REJECT',{remarks:data.remarks,reviewedScheduleConversion:data.decision==='Approved'&&Boolean(data.allow_schedule_conversion),leaveCode:policy.leave_code});
  });res.json({message:'LEAVE_REQUEST_DECISION_SAVED'});}
 export async function requestCancel(req,res){access(req,'self');const requestId=id.parse(req.params.id),data=z.object({reason:z.string().trim().min(4).max(1000)}).strict().parse(req.body);
  await tx(req.auth.pool,async c=>{const {r}=await lockRequest(c,req,requestId);if(r.request_status!=='Pending')fail('ONLY_PENDING_LEAVE_CANCELLABLE',409);
