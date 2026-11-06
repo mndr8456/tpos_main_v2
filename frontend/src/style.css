@@ -240,7 +240,17 @@
 .product-checks{display:flex;gap:15px;align-items:center;flex-wrap:wrap;margin:16px 0}
 .product-check{display:inline-flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid #d6e1ef;border-radius:10px;color:#35506c;cursor:pointer;font-weight:600;font-size:12px}
 .product-check input{accent-color:#1e60c6;width:16px;height:16px}
+/* Branch-specific physical stock comes from Inventory, never Product Master. */
 .product-no-stock{color:#7b8ca7;font-weight:bold}
+.product-page .product-stock-qty{text-align:center;font-variant-numeric:tabular-nums;white-space:nowrap}
+.product-live-stock-qty{font-weight:700;color:#164b83}
+.product-live-stock{margin:12px 0;padding:10px 14px;border:1px solid #d6e4f4;background:#f7faff;border-radius:10px}
+.product-live-stock .field{max-width:320px}
+.product-live-stock .field input{background:#edf3fa;color:#183d6c;font-weight:700;font-variant-numeric:tabular-nums}
+.product-live-stock .muted{margin:7px 0 0}
+.product-page .product-tools select[aria-label="Select Stock Branch"]{max-width:210px}
+.product-page .product-tools{flex-wrap:wrap}
+.product-page .product-tools .search{flex:1 1 260px}
 .product-tools select{max-width:185px}.product-import-tools{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
 .product-preview{max-height:285px;overflow:auto;border:1px solid #e0e8f3;border-radius:10px}
 .product-danger{color:#b4342d!important}
@@ -627,3 +637,7 @@
 .my-profile-panel p{margin:0;display:flex;align-items:center;gap:7px}
 .my-profile-panel .primary{justify-self:end}
 @media(max-width:780px){.my-profile-grid{grid-template-columns:1fr}}
+
+/* Product live stock: 4 highlights wrap as 2 columns, 1 on a narrow device. */
+.product-view-highlights{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(max-width:470px){.product-view-highlights{grid-template-columns:1fr}}

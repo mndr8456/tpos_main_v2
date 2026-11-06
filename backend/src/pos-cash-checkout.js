@@ -7,20 +7,23 @@ import {inventoryIssue} from './inventory-cost.js';
 import {totalDraftLines} from './pos-money.js';
 import {makePosCashJournal} from './pos-cash-ledger.js';
 import {parseSen,fmtSen} from './cash-shift-money.js';
+import {saleTaxRateSnapshot} from './pos-receipt-tax-rates.js';
+import {assignPosReceiptNumber,legacyReceiptNumber} from './pos-receipt-number.js';
 const id=z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const schema=z.object({requestKey:z.uuid(),expectedVersion:z.number().int().positive(),expectedTotal:z.string().regex(/^(0|[1-9]\d{0,9})(?:\.\d{1,2})?$/),cashReceived:z.string().regex(/^(0|[1-9]\d{0,9})(?:\.\d{1,2})?$/),discountCode:z.string().trim().default(''),voucherCode:z.string().trim().default('')}).strict();
 const err=(code,status=409)=>Object.assign(new Error(code),{status});
 const str=v=>String(v);
-async function receipt(conn,saleId){
+export async function receipt(conn,saleId){
  const [[sale]]=await conn.execute("SELECT s.*,DATE_FORMAT(s.posted_at,'%Y-%m-%d %H:%i:%s') AS posted_time,b.name AS branch_name,u.full_name AS cashier_name FROM pos_sales s JOIN branches b ON b.id=s.branch_id JOIN users u ON u.id=s.cashier_user_id WHERE s.id=?",[saleId]);
  if(!sale)throw err('POS_SALE_NOT_FOUND',404);
  const [lines]=await conn.execute('SELECT product_name,sku,quantity,unit_price,line_total,inventory_cost FROM pos_sale_lines WHERE sale_id=? ORDER BY id',[saleId]);
  const [[company]]=await conn.execute('SELECT registered_name,trading_name,address_line1,address_line2,city,postcode,state,country,phone,email FROM company_profiles WHERE id=1');
  const [[registration]]=await conn.execute('SELECT ssm_registration_number,ssm_old_registration_number,sst_sales_tax_number,sst_service_tax_number FROM company_registrations WHERE id=1');
+ const [[paymentAttempt]]=(!sale.payment_method||sale.payment_method==='CASH')?[[]]:await conn.execute('SELECT payment_reference,verification_mode FROM pos_payment_attempts WHERE sale_id=? LIMIT 1',[saleId]);
  const [sstSwitches]=await conn.execute('SELECT tax_type,is_enabled FROM sst_tax_settings ORDER BY tax_type');
  const enabledTax=new Set(sstSwitches.filter(row=>Boolean(row.is_enabled)).map(row=>String(row.tax_type)));
  return {
-  saleId:str(sale.id),receiptNumber:`POS-${str(sale.id).padStart(9,'0')}`,
+  saleId:str(sale.id),receiptNumber:sale.receipt_number||legacyReceiptNumber(sale.id),
   companyName:company?.registered_name||company?.trading_name||'',registeredName:company?.registered_name||'',
   ssmNumber:registration?.ssm_registration_number||'',ssmOldNumber:registration?.ssm_old_registration_number||'',
   // The two SST registrations follow their independent Owner switches.
@@ -34,8 +37,11 @@ async function receipt(conn,saleId){
   branchName:sale.branch_name,cashierName:sale.cashier_name,postedAtUtc:sale.posted_time,
   orderScope:sale.order_scope,tableId:sale.table_id?str(sale.table_id):null,
   lines,subtotal:str(sale.subtotal),salesTax:str(sale.sales_tax),serviceTax:str(sale.service_tax),
+  salesTaxRate:sale.sales_tax_rate_pct==null?null:str(sale.sales_tax_rate_pct),
+  serviceTaxRate:sale.service_tax_rate_pct==null?null:str(sale.service_tax_rate_pct),
+  serviceChargeRate:sale.service_charge_rate_pct==null?null:str(sale.service_charge_rate_pct),
   serviceCharge:str(sale.service_charge),roundingAdjustment:str(sale.rounding_adjustment),
-  total:str(sale.total),cashReceived:str(sale.cash_received),cashChange:str(sale.cash_change),paymentMethod:'CASH'
+  total:str(sale.total),cashReceived:str(sale.cash_received),cashChange:str(sale.cash_change),paymentMethod:String(sale.payment_method),paymentReference:paymentAttempt?.payment_reference||'',verificationMode:paymentAttempt?.verification_mode||'CASH'
  };
 }
 export async function cashCheckout(req,res){
@@ -94,22 +100,26 @@ export async function cashCheckout(req,res){
   }
   if(cogs>999999999999n)throw err('POS_COST_LIMIT');
   const journal=makePosCashJournal(quote.bill,fmtSen(cogs));
-  const [saved]=await conn.execute(`INSERT INTO pos_sales(request_key,draft_id,branch_id,shift_id,cashier_user_id,table_id,order_scope,payment_method,subtotal,sales_tax,service_tax,service_charge,rounding_adjustment,total,cost_of_goods,cash_received,cash_change)
-   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,[data.requestKey,draftId,draft.branch_id,draft.shift_id,req.auth.user.id,draft.table_id,draft.order_scope,'CASH',quote.bill.subtotalBeforeTax,quote.bill.salesTax,quote.bill.serviceTax,quote.bill.serviceCharge,fmtSen(BigInt(quote.bill.roundingAdjustmentSen)),total,fmtSen(cogs),fmtSen(paid),fmtSen(paid-due)]);
+  // The tax/fee percentages on a receipt must be those effective at posting.
+  // Never re-read mutable Owner Settings to invent historical rates.
+  const rateSnapshot=saleTaxRateSnapshot(quote);
+  const [saved]=await conn.execute(`INSERT INTO pos_sales(request_key,draft_id,branch_id,shift_id,cashier_user_id,table_id,order_scope,payment_method,subtotal,sales_tax,sales_tax_rate_pct,service_tax,service_tax_rate_pct,service_charge,service_charge_rate_pct,rounding_adjustment,total,cost_of_goods,cash_received,cash_change)
+   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,[data.requestKey,draftId,draft.branch_id,draft.shift_id,req.auth.user.id,draft.table_id,draft.order_scope,'CASH',quote.bill.subtotalBeforeTax,quote.bill.salesTax,rateSnapshot.salesTaxRate,quote.bill.serviceTax,rateSnapshot.serviceTaxRate,quote.bill.serviceCharge,rateSnapshot.serviceChargeRate,fmtSen(BigInt(quote.bill.roundingAdjustmentSen)),total,fmtSen(cogs),fmtSen(paid),fmtSen(paid-due)]);
   const saleId=saved.insertId;
+  const receiptNumber=await assignPosReceiptNumber(conn,saleId);
   for(const line of subtotal.lines){
    const movement=issued.get(str(line.product_id));
    await conn.execute('INSERT INTO pos_sale_lines(sale_id,product_id,product_name,sku,quantity,unit_price,line_total,track_stock,inventory_cost) VALUES(?,?,?,?,?,?,?,?,?)',[saleId,line.product_id,line.product_name,line.sku,line.quantity,line.unit_price,line.lineTotal,line.track_stock?1:0,movement?.issuedCost||'0.00']);
    if(movement){
     await conn.execute('UPDATE inventory_branch_balances SET quantity_on_hand=?,carrying_value=?,average_cost=?,version=version+1,updated_at=UTC_TIMESTAMP(6) WHERE branch_id=? AND product_id=?',[movement.quantity,movement.carryingValue,movement.averageCost,draft.branch_id,line.product_id]);
     const requestKey=randomUUID(),hash=createHash('sha256').update(JSON.stringify({saleId:str(saleId),productId:str(line.product_id),qty:line.quantity,cost:movement.issuedCost})).digest('hex');
-    await conn.execute("INSERT INTO inventory_movements(request_key,request_hash,branch_id,product_id,movement_type,quantity_delta,value_delta,quantity_after,carrying_value_after,average_cost_after,reference,actor_user_id) VALUES(?,?,?,?,'POS_SALE',?,?,?,?,?,?,?)",[requestKey,hash,draft.branch_id,line.product_id,`-${Number(line.quantity).toFixed(2)}`,`-${movement.issuedCost}`,movement.quantity,movement.carryingValue,movement.averageCost,`POS-${str(saleId).padStart(9,'0')}`,req.auth.user.id]);
+    await conn.execute("INSERT INTO inventory_movements(request_key,request_hash,branch_id,product_id,movement_type,quantity_delta,value_delta,quantity_after,carrying_value_after,average_cost_after,reference,actor_user_id) VALUES(?,?,?,?,'POS_SALE',?,?,?,?,?,?,?)",[requestKey,hash,draft.branch_id,line.product_id,`-${Number(line.quantity).toFixed(2)}`,`-${movement.issuedCost}`,movement.quantity,movement.carryingValue,movement.averageCost,receiptNumber,req.auth.user.id]);
    }
   }
   const [j]=await conn.execute("INSERT INTO accounting_journals(source_type,source_id,branch_id) VALUES('POS_CASH_SALE',?,?)",[saleId,draft.branch_id]);
   for(const line of journal){await conn.execute('INSERT INTO accounting_journal_lines(journal_id,account_code,debit,credit,description) VALUES(?,?,?,?,?)',[j.insertId,line.accountCode,line.debit,line.credit,line.description]);}
   await conn.execute("UPDATE pos_drafts SET status='COMPLETED',version=version+1,updated_at=UTC_TIMESTAMP(6) WHERE id=? AND status='DRAFT'",[draftId]);
-  await conn.execute("INSERT INTO pos_draft_audit_logs(draft_id,actor_user_id,action_type,details) VALUES(?,?,'COMPLETE',?)",[draftId,req.auth.user.id,JSON.stringify({saleId:str(saleId),method:'CASH',total,receipt:`POS-${str(saleId).padStart(9,'0')}`})]);
+  await conn.execute("INSERT INTO pos_draft_audit_logs(draft_id,actor_user_id,action_type,details) VALUES(?,?,'COMPLETE',?)",[draftId,req.auth.user.id,JSON.stringify({saleId:str(saleId),method:'CASH',total,receipt:receiptNumber})]);
   if(draft.table_id)await conn.execute("INSERT INTO restaurant_table_audit_logs(table_id,actor_user_id,action_type,details) VALUES(?,?,'RELEASE',?)",[draft.table_id,req.auth.user.id,JSON.stringify({draftId:str(draftId),reason:'COMPLETED',saleId:str(saleId)})]);
   const answer=await receipt(conn,saleId);
   await conn.commit();return res.status(201).set('Cache-Control','no-store').json({message:'POS_CASH_SALE_PAID',idempotent:false,receipt:answer});

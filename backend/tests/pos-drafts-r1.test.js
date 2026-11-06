@@ -52,7 +52,8 @@ test('POS terminal is a business-aware product-grid terminal with persistent ord
  const ui=await src('frontend/src/PosTerminal.jsx'),app=await src('frontend/src/App.jsx');
  for(const x of ['New Order','CURRENT ORDER','Scan barcode','Hold','Resume','Discard','Sales / Services Tax','Order Activity Log','Payment / Checkout'])assert.ok(ui.includes(x),`Missing ${x}`);
  for(const code of ['RESTAURANT','CAFE','FOOD_TRUCK','STREET_FOOD','GROCERY','RETAIL','MINI_MARKET'])assert.ok(ui.includes(code));
- assert.match(ui,/Card, bank, QR and E-Wallet methods remain unavailable/);
+ assert.match(ui,/PosMultiPayment/);
+ assert.match(await src('frontend/src/PosMultiPayment.jsx'),/SARA\/MyKasih and automatic provider transactions require a certified provider connection/);
  assert.match(ui,/request\('\/pos\/drafts'/);
  assert.match(app,/PosTerminal/);assert.match(app,/canViewPos/);
 });

@@ -7,11 +7,14 @@ import {inventoryIssue} from '../src/inventory-cost.js';
 import {makePosCashJournal} from '../src/pos-cash-ledger.js';
 import {totalDraftLines} from '../src/pos-money.js';
 import {parseSen,fmtSen} from '../src/cash-shift-money.js';
+import {assignPosReceiptNumber,legacyReceiptNumber} from '../src/pos-receipt-number.js';
 const source=readFileSync(new URL('../src/pos-cash-checkout.js',import.meta.url),'utf8');
 const chain={int(){return this},positive(){return this},max(){return this},regex(){return this},uuid(){return this},trim(){return this},default(){return this},strict(){return this},parse(v){return v}};
 const z={coerce:{number:()=>chain},object:()=>chain,string:()=>chain,uuid:()=>chain,number:()=>chain};
+// The real receipt-number writer participates in the mocked atomic transaction.
+const saleTaxRateSnapshot=()=>({salesTaxRate:null,serviceTaxRate:null,serviceChargeRate:null});
 function checkoutHarness(){
- const ctx={z,randomUUID,createHash,inventoryIssue,makePosCashJournal,totalDraftLines,parseSen,fmtSen,console,Map,JSON,BigInt,Number,String,Error,Set,Promise};
+ const ctx={z,randomUUID,createHash,inventoryIssue,makePosCashJournal,totalDraftLines,parseSen,fmtSen,saleTaxRateSnapshot,assignPosReceiptNumber,legacyReceiptNumber,console,Map,JSON,BigInt,Number,String,Error,Set,Promise};
  const text=source.replace(/^import .*?;$/gm,'').replace(/export async function /g,'async function ').replace(/export function /g,'function ');
  const sandbox=vm.createContext(ctx);vm.runInContext(text+'\nglobalThis.cashCheckoutHarness=cashCheckout;',sandbox);
  return sandbox.cashCheckoutHarness;
@@ -32,6 +35,7 @@ function fixture({stock='10.00',failOn='',saleExists=false}={}){
   if(sql.startsWith('SELECT quantity_on_hand,carrying_value,average_cost FROM inventory_branch_balances'))return [[{quantity_on_hand:stock,carrying_value:'35.00',average_cost:'3.50'}]];
   if(sql.startsWith('INSERT INTO')){writes.push(sql);return [{insertId:sql.includes('pos_sales(')?11:22,affectedRows:1}]}
   if(sql.startsWith('UPDATE')){writes.push(sql);return [{affectedRows:1}]}
+  if(sql.startsWith("SELECT receipt_number,DATE_FORMAT(posted_at"))return [[{receipt_number:null,receipt_prefix:'2026111200'}]];
   if(sql.startsWith('SELECT s.*,DATE_FORMAT(s.posted_at'))return [[sale]];
   if(sql.startsWith('SELECT product_name,sku,quantity,unit_price,line_total,inventory_cost FROM pos_sale_lines'))return [[{product_name:'Nasi',quantity:'5.000',unit_price:'5.0000',line_total:'25.00',inventory_cost:'17.50'}]];
   if(sql.startsWith('SELECT registered_name,trading_name'))return [[{registered_name:'Test Business',address_line1:'Test Street',city:'Kajang',postcode:'43000',state:'Selangor'}]];
@@ -49,7 +53,7 @@ const get=checkoutHarness();
 // The quote function is intentionally stubbed here; the authoritative quote itself has dedicated SST/tax tests.
 const calculateDraftQuote=async(_conn,_req,_draftId,_codes)=>({bill:{total:'25.00',subtotalBeforeTax:'25.00',salesTax:'0.00',serviceTax:'0.00',serviceCharge:'0.00',roundingAdjustmentSen:0}});
 // Inject quote into the handler's module context for deterministic tenant DB tests.
-function handler(){const sandbox=vm.createContext({z,randomUUID,createHash,inventoryIssue,makePosCashJournal,totalDraftLines,parseSen,fmtSen,calculateDraftQuote,console,Map,JSON,BigInt,Number,String,Error,Set,Promise});const s=source.replace(/^import .*?;$/gm,'').replace(/export async function /g,'async function ').replace(/export function /g,'function ');vm.runInContext(s+'\nglobalThis.handler=cashCheckout;',sandbox);return sandbox.handler;}
+function handler(){const sandbox=vm.createContext({z,randomUUID,createHash,inventoryIssue,makePosCashJournal,totalDraftLines,parseSen,fmtSen,calculateDraftQuote,saleTaxRateSnapshot,assignPosReceiptNumber,legacyReceiptNumber,console,Map,JSON,BigInt,Number,String,Error,Set,Promise});const s=source.replace(/^import .*?;$/gm,'').replace(/export async function /g,'async function ').replace(/export function /g,'function ');vm.runInContext(s+'\nglobalThis.handler=cashCheckout;',sandbox);return sandbox.handler;}
 test('Cash checkout commits a single sale, stock issue, journal, cash received and receipt',async()=>{
  const f=fixture();await handler()(f.req,f.res);
  assert.equal(f.res.statusCode,201);assert.equal(f.res.value.receipt.total,'25.00');assert.equal(f.res.value.receipt.cashChange,'5.00');

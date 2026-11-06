@@ -12,6 +12,8 @@ function access(req,mode='self'){
  const p=req.auth.user.permissions;
  if(mode==='view'&&!(p.includes('leave_requests.view')||p.includes('leave_requests.self')))fail('LEAVE_REQUESTS_ACCESS_DENIED',403);
  if(mode==='self'&&!(p.includes('leave_requests.manage')||p.includes('leave_requests.self')))fail('LEAVE_REQUESTS_ACCESS_DENIED',403);
+ if(mode==='create'&&!(p.includes('leave_requests.create')||p.includes('leave_requests.self')))fail('LEAVE_REQUESTS_ACCESS_DENIED',403);
+ if(mode==='update'&&!(p.includes('leave_requests.update')||p.includes('leave_requests.self')))fail('LEAVE_REQUESTS_ACCESS_DENIED',403);
  if(mode==='approve'&&(!isPriv(req)||!p.includes('leave_requests.approve')))fail('LEAVE_REQUESTS_APPROVAL_DENIED',403);
  if(['audit','recalculate'].includes(mode)&&(!isPriv(req)||!p.includes(`leave_requests.${mode}`)))fail('LEAVE_REQUESTS_ACCESS_DENIED',403);
 }
@@ -123,8 +125,8 @@ export async function requestDetail(req,res){access(req,'view');const requestId=
  const scheduleConversionCount=attendanceState==='SCHEDULE_ONLY'?attendance.length:0;
  res.set('Cache-Control','no-store').json({item:publicRow(r),attachments:attachments.map(x=>({...x,id:String(x.id)})),attendanceCheck,attendanceState,scheduleConversionCount});
 }
-export async function requestCreate(req,res){access(req,'self');const requestId=await tx(req.auth.pool,c=>submit(c,req,req.body));res.status(201).json({message:'LEAVE_REQUEST_SUBMITTED',id:String(requestId)});}
-export async function requestEdit(req,res){access(req,'self');const requestId=id.parse(req.params.id);await tx(req.auth.pool,async c=>{
+export async function requestCreate(req,res){access(req,'create');const requestId=await tx(req.auth.pool,c=>submit(c,req,req.body));res.status(201).json({message:'LEAVE_REQUEST_SUBMITTED',id:String(requestId)});}
+export async function requestEdit(req,res){access(req,'update');const requestId=id.parse(req.params.id);await tx(req.auth.pool,async c=>{
  const {r}=await lockRequest(c,req,requestId);if(r.request_status!=='Pending')fail('ONLY_PENDING_LEAVE_EDITABLE',409);
  const {input,period,t,attachmentData}=await validate(c,req,req.body,{skipId:requestId});
  if(Number(r.staff_profile_id)!==input.staff_profile_id)fail('STAFF_CANNOT_CHANGE',409);

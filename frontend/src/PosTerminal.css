@@ -110,3 +110,6 @@
 .pos-checkout-stock-alert li+li {margin-top:5px}
 .pos-checkout-stock-alert p {margin:7px 0 0;font-size:11px}
 .pos-checkout-payment-error {background:#fff1ef;color:#9f3431;border:1px solid #eeb9b4;border-radius:8px;padding:9px 12px;font-size:12px;margin:12px 0 0}
+
+/* Waiter-to-POS pending order review is read-only until Receive. */
+.pos-waiter-preview{padding:14px;border:1px solid #d7e2ef;border-radius:10px;margin-top:12px;background:#f7faff}.pos-waiter-preview h3{margin:0 0 8px;font-size:16px}.pos-waiter-preview p{margin:6px 0 12px}.pos-waiter-preview table{width:100%}

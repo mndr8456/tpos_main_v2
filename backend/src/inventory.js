@@ -15,6 +15,13 @@ function ensureOpeningAccess(req){if(!elevated(req)||!req.auth.user.permissions.
 const mapped=r=>({...r,branch_id:String(r.branch_id),product_id:String(r.product_id),id:r.id===undefined?undefined:String(r.id)});
 // Safe inventory catalog for the management page. Never includes reference cost,
 // average cost or balances outside the existing inventory permission scope.
+// Reference costs are Product Master estimates, not actual receiving prices or WAC.
+// Keep them OUT of /inventory/meta so stock-only staff cannot infer purchase costs.
+export async function inventoryReferenceCosts(req,res){
+ if(!req.auth.user.permissions.includes('products.cost.view'))throw bad('INVENTORY_REFERENCE_COST_FORBIDDEN',403);
+ const [rows]=await req.auth.pool.execute("SELECT id,cost_price FROM products WHERE product_type='GOODS' AND product_structure='SINGLE' AND track_stock=1 AND status='ACTIVE' AND is_deleted=0 ORDER BY id LIMIT 5000");
+ return res.set('Cache-Control','no-store').json({referenceCosts:rows.map(row=>({productId:String(row.id),referenceCost:String(row.cost_price)}))});
+}
 export async function inventoryMeta(req,res){
  const [branchRows,productRows]=await Promise.all([
   req.auth.pool.execute('SELECT id,code,name FROM branches WHERE is_active=1 ORDER BY name'),

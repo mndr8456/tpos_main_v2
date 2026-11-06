@@ -73,8 +73,8 @@ export async function posBootstrap(req,res){
  const [branchPriceRows]=visible.length?await pool.execute(`SELECT product_id,branch_id,selling_price FROM product_branch_prices WHERE branch_id IN (${visible.map(()=>'?').join(',')})`,visible.map(b=>b.id)):[[]];
  // Quantity-only stock snapshots: no cashier access to average cost or carrying value.
  const [stockRows]=visible.length?await pool.execute(`SELECT branch_id,product_id,quantity_on_hand FROM inventory_branch_balances WHERE branch_id IN (${visible.map(()=>'?').join(',')})`,visible.map(b=>b.id)):[[]];
- const [tableRows]=await pool.execute(`SELECT t.id,t.branch_id,t.table_number,t.table_name,t.table_area,t.seating_capacity,t.table_status,CASE WHEN d.id IS NULL THEN t.table_status ELSE 'OCCUPIED' END AS occupancy,d.id AS draft_id,d.cashier_user_id AS assigned_cashier FROM restaurant_tables t LEFT JOIN pos_drafts d ON d.active_table_id=t.id WHERE t.is_deleted=0 AND t.status='ACTIVE' ORDER BY t.branch_id,t.table_area,t.sort_order,t.table_number`);
- const [methods]=await pool.execute('SELECT branch_id,method_code,is_active FROM payment_method_settings WHERE is_active=1 AND method_code<>\'SARA_MYKASIH\'');
+ const [tableRows]=await pool.execute(`SELECT t.id,t.branch_id,t.table_number,t.table_name,t.table_area,t.seating_capacity,t.table_status,CASE WHEN d.id IS NULL AND w.id IS NULL THEN t.table_status ELSE 'OCCUPIED' END AS occupancy,d.id AS draft_id,d.cashier_user_id AS assigned_cashier,w.id AS waiter_order_id FROM restaurant_tables t LEFT JOIN pos_drafts d ON d.active_table_id=t.id LEFT JOIN waiter_orders w ON w.active_table_id=t.id WHERE t.is_deleted=0 AND t.status='ACTIVE' ORDER BY t.branch_id,t.table_area,t.sort_order,t.table_number`);
+ const [methods]=await pool.execute(`SELECT s.branch_id,s.method_code,s.is_active,s.provider_name,s.provider_merchant_ref,s.provider_terminal_ref,EXISTS(SELECT 1 FROM payment_method_images i WHERE i.setting_id=s.id) AS has_image FROM payment_method_settings s WHERE s.is_active=1`);
  return res.set('Cache-Control','no-store').json({branches:visible.map(b=>({...b,id:String(b.id)})),openShifts:shifts.filter(s=>visible.some(b=>String(b.id)===String(s.branch_id))).map(s=>({...s,id:String(s.id),branch_id:String(s.branch_id)})),products:products.map(p=>({...p,id:String(p.id),category_id:String(p.category_id)})),categories:categories.map(c=>({...c,id:String(c.id)})),branchPrices:branchPriceRows.map(bp=>({product_id:String(bp.product_id),branch_id:String(bp.branch_id),selling_price:String(bp.selling_price)})),stockLevels:stockRows.map(x=>({branch_id:String(x.branch_id),product_id:String(x.product_id),quantity_on_hand:String(x.quantity_on_hand)})),restaurantTables:['RESTAURANT','CAFE'].includes(req.auth.company.business_type)?tableRows.filter(t=>visible.some(b=>String(b.id)===String(t.branch_id))).map(t=>({...t,id:String(t.id),branch_id:String(t.branch_id),draft_id:t.draft_id==null?null:String(t.draft_id)})):[],enabledPaymentMethods:methods.filter(m=>visible.some(b=>String(b.id)===String(m.branch_id))),checkoutAvailable:false,cashCheckoutAvailable:true,stage:'CASH_CHECKOUT_WITH_ATOMIC_STOCK_AND_JOURNAL'});
 }
 export async function listPosDrafts(req,res){
@@ -105,7 +105,8 @@ export async function createPosDraft(req,res){
    if(!table||String(table.branch_id)!==String(data.branchId))throw bad('POS_TABLE_NOT_IN_BRANCH',409);
    if(table.status!=='ACTIVE'||table.table_status!=='AVAILABLE')throw bad('POS_TABLE_NOT_AVAILABLE',409);
    const [[taken]]=await conn.execute('SELECT id FROM pos_drafts WHERE active_table_id=? LIMIT 1',[data.tableId]);
-   if(taken)throw bad('POS_TABLE_OCCUPIED',409);
+   const [[waiting]]=await conn.execute('SELECT id FROM waiter_orders WHERE active_table_id=? LIMIT 1',[data.tableId]);
+   if(taken||waiting)throw bad('POS_TABLE_OCCUPIED',409);
   }
   const [[product]]=await conn.execute(`SELECT p.id,p.sku,p.barcode,p.product_name,p.category_id,p.base_unit_code,p.is_weighable,p.track_stock,p.product_type,p.product_structure,COALESCE(bp.selling_price,p.selling_price) AS price FROM products p LEFT JOIN product_branch_prices bp ON bp.product_id=p.id AND bp.branch_id=? WHERE p.id=? AND p.status='ACTIVE' AND p.is_deleted=0 FOR UPDATE`,[data.branchId,data.productId]);
   if(!product)throw bad('POS_PRODUCT_NOT_AVAILABLE',404);
@@ -270,7 +271,8 @@ export async function assignPosTable(req,res){
    if(!table||String(table.branch_id)!==String(d.branch_id))throw bad('POS_TABLE_NOT_IN_BRANCH',409);
    if(table.status!=='ACTIVE'||table.table_status!=='AVAILABLE')throw bad('POS_TABLE_NOT_AVAILABLE',409);
    const [[occupied]]=await conn.execute('SELECT id,cashier_user_id FROM pos_drafts WHERE active_table_id=? AND id<>? LIMIT 1',[table.id,d.id]);
-   if(occupied)throw bad('POS_TABLE_OCCUPIED',409);
+   const [[waiting]]=await conn.execute('SELECT id FROM waiter_orders WHERE active_table_id=? LIMIT 1',[table.id]);
+   if(occupied||waiting)throw bad('POS_TABLE_OCCUPIED',409);
   }
   const prior=d.table_id;
   await conn.execute('UPDATE pos_drafts SET table_id=?,order_scope=?,version=version+1,updated_at=UTC_TIMESTAMP(6) WHERE id=?',[data.tableId,data.tableId===null?'TAKE_AWAY':'DINE_IN',d.id]);

@@ -30,8 +30,8 @@ test('POS grid uses real categories, product images, barcode scan and branch pri
 test('POS checkout remains protected while Dine In has a dedicated table adapter',async()=>{
  const ui=await src('frontend/src/PosTerminal.jsx');
  const backend=await src('backend/src/pos-drafts.js');
- assert.match(ui,/pos-payment-methods/);
- assert.match(ui,/Card, bank, QR and E-Wallet methods remain unavailable/);
+ assert.match(await src('frontend/src/PosMultiPayment.jsx'),/pos-payment-methods/);
+ assert.match(await src('frontend/src/PosMultiPayment.jsx'),/SARA\/MyKasih and automatic provider transactions require a certified provider connection/);
  assert.match(ui,/Select Dine In Table/);
  assert.match(backend,/POS_DINE_IN_TABLE_REQUIRED/);
  assert.match(backend,/POS_TABLE_NOT_AVAILABLE/);

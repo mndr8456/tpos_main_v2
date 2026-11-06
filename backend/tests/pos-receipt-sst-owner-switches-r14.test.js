@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {legacyReceiptNumber} from '../src/pos-receipt-number.js';
 const file=new URL('../src/pos-cash-checkout.js',import.meta.url);
 const src=readFileSync(file,'utf8');
 const receiptFunction=src.slice(src.indexOf('async function receipt('),src.indexOf('export async function cashCheckout('));
@@ -15,7 +16,7 @@ function fixture(salesOn,serviceOn){
   if(sql.includes('FROM sst_tax_settings'))return [[{tax_type:'SALES_TAX',is_enabled:salesOn?1:0},{tax_type:'SERVICE_TAX',is_enabled:serviceOn?1:0}]];
   throw Error('Unexpected SQL '+sql);
  }};
- const sandbox=vm.createContext({str:value=>String(value)});
+ const sandbox=vm.createContext({str:value=>String(value),legacyReceiptNumber});
  vm.runInContext(receiptFunction+'\nglobalThis.readReceipt=receipt;',sandbox);
  return {read:()=>sandbox.readReceipt(conn,1),queries};
 }

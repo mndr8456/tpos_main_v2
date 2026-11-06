@@ -9,14 +9,14 @@ const permitted=(req,code)=>{if(!req.auth.user.permissions.includes(code))throw 
 const transact=async(pool,fn)=>{const c=await pool.getConnection();try{await c.beginTransaction();const r=await fn(c);await c.commit();return r;}catch(e){await c.rollback();if(e.code==='ER_DUP_ENTRY')throw fail('TABLE_NUMBER_ALREADY_EXISTS',409);if(e.code==='ER_LOCK_DEADLOCK')throw fail('TABLE_CONFLICT_RETRY',409);throw e;}finally{c.release();}};
 async function audit(conn,req,tableId,action,details){await conn.execute('INSERT INTO restaurant_table_audit_logs(table_id,actor_user_id,action_type,details) VALUES(?,?,?,?)',[tableId,req.auth.user.id,action,JSON.stringify(details)]);}
 export const tablesSelect=`SELECT t.id,t.branch_id,b.code AS branch_code,b.name AS branch_name,t.table_number,t.table_name,t.table_area,t.seating_capacity,t.table_status,t.status,t.sort_order,t.is_deleted,
- CASE WHEN d.id IS NOT NULL THEN 'OCCUPIED' ELSE t.table_status END AS occupancy,
- d.id AS draft_id,d.cashier_user_id AS assigned_cashier, d.status AS draft_status
+ CASE WHEN d.id IS NOT NULL OR w.id IS NOT NULL THEN 'OCCUPIED' ELSE t.table_status END AS occupancy,
+ d.id AS draft_id,d.cashier_user_id AS assigned_cashier, d.status AS draft_status,w.id AS waiter_order_id
  FROM restaurant_tables t JOIN branches b ON b.id=t.branch_id
- LEFT JOIN pos_drafts d ON d.active_table_id=t.id`;
+ LEFT JOIN pos_drafts d ON d.active_table_id=t.id LEFT JOIN waiter_orders w ON w.active_table_id=t.id`;
 const rowMap=x=>({...x,id:String(x.id),branch_id:String(x.branch_id),draft_id:x.draft_id==null?null:String(x.draft_id)});
 async function getTable(conn,tableId,lock=false,includeArchived=false){const [[row]]=await conn.execute(`SELECT * FROM restaurant_tables WHERE id=?${includeArchived?'':' AND is_deleted=0'}${lock?' FOR UPDATE':''}`,[tableId]);if(!row)throw fail('TABLE_NOT_FOUND',404);return row;}
 async function ensureBranch(conn,req,branchId){checkBranch(req,branchId);const [[b]]=await conn.execute('SELECT id FROM branches WHERE id=? AND is_active=1',[branchId]);if(!b)throw fail('BRANCH_NOT_ACTIVE',409);}
-async function noActiveDraft(conn,tableId){const [[row]]=await conn.execute("SELECT id FROM pos_drafts WHERE active_table_id=? LIMIT 1",[tableId]);if(row)throw fail('TABLE_HAS_ACTIVE_ORDER',409);}
+async function noActiveDraft(conn,tableId){const [[row]]=await conn.execute("SELECT id FROM pos_drafts WHERE active_table_id=? LIMIT 1",[tableId]);const [[pending]]=await conn.execute("SELECT id FROM waiter_orders WHERE active_table_id=? LIMIT 1",[tableId]);if(row||pending)throw fail('TABLE_HAS_ACTIVE_ORDER',409);}
 export async function tableMeta(req,res){allowedBusiness(req);const [rows]=await req.auth.pool.execute('SELECT id,code,name FROM branches WHERE is_active=1 ORDER BY id');res.set('Cache-Control','no-store').json({branches:rows.filter(x=>elevated(req)||req.auth.user.branchIds.includes(String(x.id))).map(x=>({...x,id:String(x.id)}))});}
 export async function listTables(req,res){allowedBusiness(req);const query=z.object({branchId:id.optional()}).strict().parse(req.query);if(query.branchId)checkBranch(req,query.branchId);
  const [rows]=await req.auth.pool.execute(`${tablesSelect} WHERE t.is_deleted=0${query.branchId?' AND t.branch_id=?':''} ORDER BY t.branch_id,t.table_area,t.sort_order,t.table_number`,query.branchId?[query.branchId]:[]);

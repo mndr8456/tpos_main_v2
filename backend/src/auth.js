@@ -1,3 +1,4 @@
+import {granularForRoute} from './role-permission-crud-guard.js';
 import { z } from 'zod';
 import { centralPool, tenantPool } from './database.js';
 import { freshToken, hashPassword, tokenHash, verifyPassword } from './passwords.js';
@@ -65,7 +66,13 @@ export async function authenticate(req,res,next){
   next();
  }catch(error){next(error);}
 }
-export const permitted=code=>(req,res,next)=>req.auth?.user?.permissions.includes(code)?next():res.status(403).json({error:'PERMISSION_DENIED'});
+export const permitted=code=>(req,res,next)=>{
+ const grants=req.auth?.user?.permissions||[];
+ const granular=granularForRoute(code,req.method,req.path);
+ // Once 034 is installed, a legacy manage grant cannot bypass a revoked CRUD checkbox.
+ if(granular)return grants.includes(granular)?next():res.status(403).json({error:'PERMISSION_DENIED'});
+ return grants.includes(code)?next():res.status(403).json({error:'PERMISSION_DENIED'});
+};
 export async function me(req,res){
  const {user,company}=req.auth;
  return res.json({user:{id:String(user.id),fullName:user.full_name,username:user.username,mustChangePassword:Boolean(user.must_change_password),email:user.email,role:user.role_code,permissions:user.permissions,branchIds:user.branchIds},business:{name:company.business_name,type:company.business_type}});

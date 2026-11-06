@@ -3,7 +3,7 @@ import {encryptPaymentCredential,checkPaymentImage,publicPaymentState} from './p
 const codes=['CASH','DEBIT_CARD','CREDIT_CARD','BANK_TRANSFER','DUITNOW_QR','EWALLET','SARA_MYKASIH'];
 const method=z.enum(codes);const id=z.coerce.number().int().positive();
 const bad=(code,status=400)=>Object.assign(new Error(code),{status});
-const canManage=req=>['OWNER','ADMIN'].includes(req.auth.user.role_code)&&req.auth.user.permissions.includes('payment_methods.manage');
+const canManage=req=>['OWNER','ADMIN'].includes(req.auth.user.role_code)&&req.auth.user.permissions.includes('payment_methods.manage')&&req.auth.user.permissions.includes('payment_methods.update');
 const allowedBranch=(req,branchId)=>['OWNER','ADMIN'].includes(req.auth.user.role_code)||req.auth.user.branchIds.includes(String(branchId));
 const parseLoc=req=>({branchId:id.parse(req.params.branchId),code:method.parse(req.params.code)});
 const configSchema=z.object({isActive:z.boolean(),providerName:z.string().trim().max(160).default(''),providerApiUrl:z.union([z.literal(''),z.url().refine(v=>new URL(v).protocol==='https:','HTTPS_ONLY')]).default(''),merchantRef:z.string().trim().max(160).default(''),terminalRef:z.string().trim().max(160).default(''),apiKey:z.string().max(4096).optional(),clearApiKey:z.boolean().default(false)}).strict();

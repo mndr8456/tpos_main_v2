@@ -57,7 +57,7 @@ test('R1 importer exposes template Choose File Preview Confirm in matching butto
 test('R1 UI has 4 stats 6 columns, 3 sections, silently refreshes, icon actions and permission guard',async()=>{
  const ui=await source('frontend/src/LeaveTypes.jsx');
  for(const label of ['Total Records','Active','Paid Leave','Attachment Required','Leave Type Information','Leave Entitlement & Eligibility Rules','Record Settings & Description','Attendance Status','Entitlement','Rules','Actions'])assert.ok(ui.includes(label));
- assert.match(ui,/refreshPage\(load,notify\)/);assert.match(ui,/canManage&&icon\('Edit Leave Type'/);
+ assert.match(ui,/refreshPage\(load,notify\)/);assert.match(ui,/canUpdate&&icon\('Edit Leave Type'/);
  assert.match(ui,/canAudit&&icon\('Leave Type Activity Log'/);assert.match(ui,/\.sort\(\(a,b\)=>Number\(a\.sort_order\)/);
 });
 test('R1 A4 landscape PDF follows visible filter, uses business name and excludes staff private info',async()=>{

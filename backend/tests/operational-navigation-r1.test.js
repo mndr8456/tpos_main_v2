@@ -42,11 +42,12 @@ test('Profile is available to every signed-in user and implements both protected
  assert.match(profile,/currentPassword:emailPassword/);
  assert.doesNotMatch(profile,/\/users\/\$\{[^}]+\}\/password-reset/);
 });
-test('Unimplemented Order Terminal and KDS are clearly planned with disabled navigation controls',()=>{
- for(const [label,role] of [['Order Terminal','WAITER'],['KDS','KITCHEN']]){
-  assert.match(app,new RegExp(`label:'${label}'.*show:profile.user.role==='${role}',planned:true`));
- }
+test('Order Terminal is permission-driven for WAITER and KDS remains planned',()=>{
+ assert.match(app,/label:'Order Terminal',icon:ClipboardList,show:canViewOrderTerminal/);
+ assert.doesNotMatch(app,/label:'Order Terminal'[^\n]*planned:true/);
+ assert.match(app,/label:'KDS'.*planned:true/);
  assert.match(app,/disabled=\{Boolean\(entry\.planned\)\}/);
+ assert.equal(landingPage(model('WAITER',['order_terminal.view','restaurant_tables.view'])),'order-terminal');
 });
 test('Migration 033 one-time role default cleanup does not lock future Role Permissions changes',()=>{
  assert.match(sql,/tpos_feature_setup_history/);

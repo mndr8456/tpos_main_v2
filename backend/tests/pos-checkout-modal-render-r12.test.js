@@ -20,7 +20,8 @@ test('All POS JSX icons have an imported or locally declared component binding',
   if(component==='Icon')continue; // IconAction receives it as the icon:Icon prop.
   const local=new RegExp(`(?:function|class|const)\\s+${component}\\b`).test(source);
   const localNamedImport=new RegExp(`import\\s*\\{[^}]*\\b${component}\\b[^}]*\\}\\s*from`, 's').test(source);
-  assert.ok(local||localNamedImport||imported.has(component),`Missing JSX component import: ${component}`);
+  const defaultImport=new RegExp(`import\\s+${component}\\s+from`).test(source);
+  assert.ok(local||localNamedImport||defaultImport||imported.has(component),`Missing JSX component import: ${component}`);
  }
  assert.ok(imported.has('CheckCircle2'),'Payment Methods renders an imported check icon');
  assert.ok(imported.has('Printer'),'Paid receipt renders an imported print icon');

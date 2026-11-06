@@ -6,6 +6,7 @@ export const hasPermission = (profile, permission) =>
 export function landingPage(profile){
  const role=String(profile?.user?.role||'').toUpperCase();
  if(role==='CASHIER' && hasPermission(profile,'pos.view'))return 'pos';
+ if(role==='WAITER' && hasPermission(profile,'order_terminal.view'))return 'order-terminal';
  if(role==='WAITER' && hasPermission(profile,'restaurant_tables.view') && ['RESTAURANT','CAFE'].includes(String(profile?.business?.type||'').toUpperCase()))return 'restaurant-tables';
  if(role==='STAFF' && hasPermission(profile,'inventory.view'))return 'inventory';
  if(role==='KITCHEN')return 'profile'; // KDS is planned, not a live page.

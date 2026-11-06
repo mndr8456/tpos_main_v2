@@ -72,6 +72,12 @@ export async function registerTenant(request,response) {
   await executeSchema(dbName,'031_tenant_hr_leave_requests_no_import.sql');
   await executeSchema(dbName,'032_tenant_hr_leave_emergency_attendance.sql');
   await executeSchema(dbName,'033_tenant_operational_navigation_stock_in.sql');
+  await executeSchema(dbName,'034_tenant_role_permissions.sql');
+  await executeSchema(dbName,'035_tenant_pos_multi_payment.sql');
+  await executeSchema(dbName,'036_tenant_pos_receipt_tax_rates.sql');
+  await executeSchema(dbName,'037_tenant_pos_receipt_number.sql');
+  await executeSchema(dbName,'038_tenant_inventory_bulk_opening.sql');
+  await executeSchema(dbName,'039_tenant_order_terminal.sql');
   const userId=await seedProfile({id},data,passwordHash);
   await cp.execute('INSERT INTO login_directory(email,tenant_id,tenant_user_id) VALUES(?,?,?)',[data.ownerEmail,id,userId]);
   await cp.execute(`UPDATE tenants SET status='ACTIVE',activated_at=UTC_TIMESTAMP(6) WHERE id=?`,[id]);

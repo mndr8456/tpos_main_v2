@@ -1,0 +1,15 @@
+.pos-multi-payment{max-width:740px;max-height:94vh;overflow:auto}
+.pos-multi-payment .pos-pay-method{cursor:pointer;min-height:42px}
+.pos-multi-payment .pos-pay-selected{border-color:#2060bd;background:#ecf4ff;color:#134b9b;font-weight:700}
+.pos-multi-payment .pos-pay-locked{opacity:.6;cursor:not-allowed}
+.pos-multi-payment .pos-multi-verification{display:flex;flex-direction:column;gap:12px;margin-top:14px;border:1px solid #dae5f3;border-radius:11px;padding:14px}
+.pos-multi-verification .field{display:flex;flex-direction:column;gap:7px;font-size:12px;font-weight:600;color:#274365}
+.pos-multi-verification .field input{border:1px solid #cbdaed;border-radius:9px;padding:10px 12px;min-height:42px;font-size:13px;background:white;color:#183b67}
+.pos-multi-warning{display:flex;align-items:flex-start;gap:10px;background:#fff7e8;border:1px solid #f1d49a;border-radius:9px;color:#79500a;padding:11px;font-size:12px;line-height:1.5}
+.pos-multi-warning svg{flex-shrink:0}
+.pos-multi-qr{display:flex;flex-direction:column;align-items:center;gap:10px}
+.pos-multi-qr img{height:200px;max-width:100%;object-fit:contain;border:1px solid #d6e2ee;background:white;border-radius:10px;padding:8px}
+.pos-payment-attempt-note{font-size:12px;color:#5d7190;margin:0}
+.pos-multi-confirm{display:flex;align-items:flex-start;gap:10px;font-size:12px;line-height:1.5;color:#294a6e;cursor:pointer}
+.pos-multi-confirm input{width:18px;height:18px;flex-shrink:0;accent-color:#1761c4}
+@media(max-width:560px){.pos-multi-payment .pos-payment-methods{display:grid;grid-template-columns:1fr 1fr}.pos-multi-payment .pos-pay-method{font-size:11px;padding:8px}}

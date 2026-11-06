@@ -83,7 +83,7 @@ test('R1 Hold never frees table, Discard records release audit, checkout stays b
  assert.match(pos,/reason:'DISCARDED'/);
  assert.match(terminal,/Select Dine In Table/);
  assert.match(terminal,/Held \/ Saved Orders/);
- assert.match(terminal,/Card, bank, QR and E-Wallet methods remain unavailable/);
+ assert.match(terminal,/PosMultiPayment/);
  assert.match(pos,/checkoutAvailable:false/);
 });
 test('Installer is explicit --apply, registers new tenants and refuses partial migration',()=>{
@@ -100,13 +100,15 @@ test('UI and nav preserve role restrictions, auto-search, table status and branc
  assert.match(terminal,/branchTables/);
  assert.match(terminal,/assigned_cashier/);
 });
-function assignmentHarness({tableStatus='AVAILABLE',occupant=null,owner=7,branch=1,company='RESTAURANT'}={}){
+function assignmentHarness({tableStatus='AVAILABLE',occupant=null,waiterOccupant=null,owner=7,branch=1,company='RESTAURANT'}={}){
  const code=pos.slice(pos.indexOf('export async function assignPosTable')).replace('export async function','async function');
  const events=[];const d={id:10,branch_id:1,cashier_user_id:7,shift_id:4,table_id:null,status:'DRAFT',version:1};
  const conn={async execute(query,args){
   if(query.startsWith('SELECT branch_id,cashier_user_id,table_id FROM pos_drafts'))return [[{branch_id:branch,cashier_user_id:owner,table_id:d.table_id}]];
   if(query.startsWith('SELECT * FROM restaurant_tables'))return [[{id:3,branch_id:branch,status:'ACTIVE',table_status:tableStatus}]];
   if(query.startsWith('SELECT id,cashier_user_id FROM pos_drafts WHERE active_table_id='))return [[occupant]];
+  // Order Terminal R1: a submitted WAITER Dine In order also reserves its table.
+  if(query.startsWith('SELECT id FROM waiter_orders WHERE active_table_id='))return [[waiterOccupant]];
   if(query.startsWith('UPDATE pos_drafts SET table_id=')){d.table_id=args[0];d.order_scope=args[1];d.version++;events.push('UPDATE');return [{}];}
   if(query.startsWith('INSERT INTO restaurant_table_audit_logs')){events.push('AUDIT');return [{}];}
   throw Error('UNEXPECTED_SQL '+query);
@@ -130,7 +132,7 @@ test('Dine In handler actually assigns an available table and audits change',asy
  assert.equal(h.res.value.checkoutAvailable,false);
 });
 test('Dine In handler blocks occupied and unavailable tables without writes',async()=>{
- for(const options of [{occupant:{id:12,cashier_user_id:8}},{tableStatus:'RESERVED'},{tableStatus:'CLEANING'}]){
+ for(const options of [{occupant:{id:12,cashier_user_id:8}},{waiterOccupant:{id:25}},{tableStatus:'RESERVED'},{tableStatus:'CLEANING'}]){
   const h=assignmentHarness(options);await assert.rejects(()=>h.handler(h.req,h.res),/POS_TABLE_OCCUPIED|POS_TABLE_NOT_AVAILABLE/);assert.deepEqual(h.events,[]);
  }
 });

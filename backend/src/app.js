@@ -1,3 +1,4 @@
+import {getRolePermissions,updateRolePermissions,getRolePermissionAudit,rolePermissionReader,rolePermissionEditor} from './role-permissions.js';
 import express from 'express';
 import helmet from 'helmet';
 import { ZodError } from 'zod';
@@ -19,9 +20,12 @@ import {shiftMeta,listShifts,shiftDetails,openShift,addShiftMovement,closeShift,
 import {getSstSettings,saveSstSettings,listSstAudit} from './sst-settings.js';
 import {getServiceChargeSettings,saveServiceChargeSettings,listServiceChargeAudit} from './service-charge.js';
 import {posBootstrap,listPosDrafts,createPosDraft,getPosDraft,addPosLine,changePosLine,changePosDraftStatus,quotePosDraft,posDraftAudit,assignPosTable} from './pos-drafts.js';
+import {waiterBootstrap,listWaiterOrders,getWaiterOrder,sendWaiterOrder,cancelWaiterOrder,waiterQueue,waiterQueueDetail,claimWaiterOrder} from './order-terminal.js';
 import {tableMeta,listTables,createTable,updateTable,archiveTable,tableAudit,exportTables,tableTemplate,previewTableImport,importTables} from './restaurant-tables.js';
-import {inventoryMeta,inventoryBalances,inventoryMovements,openInventoryBalance,receiveInventory} from './inventory.js';
+import {inventoryMeta,inventoryReferenceCosts,inventoryBalances,inventoryMovements,openInventoryBalance,receiveInventory} from './inventory.js';
+import {previewBulkOpening,confirmBulkOpening} from './inventory-opening-bulk.js';
 import {cashCheckout,getCashReceipt} from './pos-cash-checkout.js';
+import {startNonCashPayment,completeManualPayment,manualPaymentImage,publicCustomerDisplay,getPaymentEvidence} from './pos-multi-payment.js';
 import {attendanceMeta,attendanceList,attendanceDetails,createAttendance,updateAttendance,approveAttendance,statusAttendance,attendanceAudit,attendanceTemplate,previewAttendanceImport,confirmAttendanceImport} from './attendances.js';
 import {attendanceClockToday,attendanceClockHistory,attendanceClockPunch,attendanceClockAdminMeta,addOfficeNetwork,disableOfficeNetwork,grantRemoteClock,revokeRemoteClock} from './attendance-clock.js';
 import {staffMeta,staffNextNumber,listStaff,getStaff,getMyStaff,createStaff,updateStaff,updateMyStaff,changeStaffStatus,staffAudit,staffImage,uploadStaffImage,removeStaffImage,staffCsvTemplate,previewStaffImport,confirmStaffImport} from './staff-profiles.js';
@@ -46,6 +50,11 @@ export function createApp(){
  app.use('/api/v2/attendances/import',express.json({limit:'2mb'}));
  app.use('/api/v2/leave-types/import',express.json({limit:'2mb'}));
  app.use('/api/v2/leave-balances/import',express.json({limit:'3mb'}));
+ // Bulk CSV is at most 2 MiB; enforce auth and origin before parsing this payload.
+ app.use('/api/v2/inventory/opening/bulk',(req,res,next)=>{
+  if(!['GET','HEAD','OPTIONS'].includes(req.method)&&!isAllowedRequestOrigin(req))return res.status(403).json({error:'INVALID_ORIGIN'});
+  next();
+ },authenticate,(req,res,next)=>express.json({limit:'5mb'})(req,res,next));
  // Authenticate and validate origin BEFORE parsing potentially large MC attachments.
  app.use('/api/v2/leave-requests',(req,res,next)=>{
   if(!['GET','HEAD','OPTIONS'].includes(req.method)){
@@ -56,6 +65,7 @@ export function createApp(){
  },authenticate,(req,res,next)=>express.json({limit:'72mb'})(req,res,next));
  app.use('/api/v2/products/:id/image',express.json({limit:'3mb'}));
  app.use('/api/v2/payment-methods/:branchId/:code/image',express.json({limit:'2mb'}));
+ app.use('/api/v2/pos/drafts/:id/payments/:attemptId/complete',express.json({limit:'2mb'}));
  app.use('/api/v2/staff-profiles/:id/image',express.json({limit:'2mb'}));
  app.use(express.json({limit:'320kb'}));
  app.use((req,res,next)=>{
@@ -71,6 +81,9 @@ export function createApp(){
  app.get('/api/v2/auth/me',authenticate,me);
  app.post('/api/v2/auth/logout',authenticate,logout);
  app.post('/api/v2/auth/change-password',authenticate,changePassword);
+ app.get('/api/v2/role-permissions',authenticate,rolePermissionReader,getRolePermissions);
+ app.get('/api/v2/role-permissions/audit',authenticate,rolePermissionReader,permitted('role_permissions.audit'),getRolePermissionAudit);
+ app.put('/api/v2/role-permissions',authenticate,rolePermissionEditor,updateRolePermissions);
  app.get('/api/v2/dashboard/overview',authenticate,permitted('dashboard.view'),dashboardOverview);
  app.get('/api/v2/attendance-clock/today',authenticate,permitted('attendance_clock.view'),attendanceClockToday);
  app.get('/api/v2/attendance-clock/history',authenticate,permitted('attendance_clock.view'),attendanceClockHistory);
@@ -157,10 +170,21 @@ export function createApp(){
  app.put('/api/v2/restaurant-tables/:id',authenticate,permitted('restaurant_tables.update'),updateTable);
  app.delete('/api/v2/restaurant-tables/:id',authenticate,permitted('restaurant_tables.delete'),archiveTable);
  app.get('/api/v2/inventory/meta',authenticate,permitted('inventory.view'),inventoryMeta);
+ app.get('/api/v2/inventory/reference-costs',authenticate,permitted('inventory.view'),inventoryReferenceCosts);
  app.get('/api/v2/inventory/balances',authenticate,permitted('inventory.view'),inventoryBalances);
  app.get('/api/v2/inventory/movements',authenticate,permitted('inventory.audit'),inventoryMovements);
  app.post('/api/v2/inventory/opening',authenticate,permitted('inventory.opening'),openInventoryBalance);
+ app.post('/api/v2/inventory/opening/bulk/preview',authenticate,permitted('inventory.opening'),previewBulkOpening);
+ app.post('/api/v2/inventory/opening/bulk/confirm',authenticate,permitted('inventory.opening'),confirmBulkOpening);
  app.post('/api/v2/inventory/receive',authenticate,permitted('inventory.receive'),receiveInventory);
+ app.get('/api/v2/order-terminal/bootstrap',authenticate,permitted('order_terminal.view'),waiterBootstrap);
+ app.get('/api/v2/order-terminal/orders',authenticate,permitted('order_terminal.view'),listWaiterOrders);
+ app.post('/api/v2/order-terminal/orders',authenticate,permitted('order_terminal.create'),sendWaiterOrder);
+ app.get('/api/v2/order-terminal/orders/:id',authenticate,permitted('order_terminal.view'),getWaiterOrder);
+ app.post('/api/v2/order-terminal/orders/:id/cancel',authenticate,permitted('order_terminal.cancel'),cancelWaiterOrder);
+ app.get('/api/v2/pos/waiter-queue',authenticate,permitted('order_terminal.receive'),waiterQueue);
+ app.get('/api/v2/pos/waiter-queue/:id',authenticate,permitted('order_terminal.receive'),waiterQueueDetail);
+ app.post('/api/v2/pos/waiter-queue/:id/claim',authenticate,permitted('order_terminal.receive'),claimWaiterOrder);
  app.get('/api/v2/pos/bootstrap',authenticate,permitted('pos.view'),posBootstrap);
  app.get('/api/v2/pos/drafts',authenticate,permitted('pos.view'),listPosDrafts);
  app.post('/api/v2/pos/drafts',authenticate,permitted('pos.cart.manage'),createPosDraft);
@@ -171,6 +195,11 @@ export function createApp(){
  app.patch('/api/v2/pos/drafts/:id/table',authenticate,permitted('pos.cart.manage'),assignPosTable);
  app.post('/api/v2/pos/drafts/:id/quote',authenticate,permitted('pos.view'),quotePosDraft);
  app.post('/api/v2/pos/drafts/:id/checkout/cash',authenticate,permitted('pos.checkout.cash'),cashCheckout);
+ app.post('/api/v2/pos/drafts/:id/payments/start',authenticate,permitted('pos.checkout.manual'),startNonCashPayment);
+ app.post('/api/v2/pos/drafts/:id/payments/:attemptId/complete',authenticate,permitted('pos.checkout.manual'),completeManualPayment);
+ app.get('/api/v2/pos/drafts/:id/payments/:attemptId/qr-image',authenticate,permitted('pos.view'),manualPaymentImage);
+ app.get('/api/v2/pos/payment-attempts/:attemptId/evidence',authenticate,permitted('pos.audit'),getPaymentEvidence);
+ app.post('/api/v2/pos/customer-display/view',publicCustomerDisplay);
  app.get('/api/v2/pos/sales/:saleId/receipt',authenticate,permitted('pos.view'),getCashReceipt);
  app.get('/api/v2/pos/drafts/:id/audit',authenticate,permitted('pos.audit'),posDraftAudit);
  app.get('/api/v2/payment-methods',authenticate,permitted('payment_methods.view'),listPaymentMethods);

@@ -54,7 +54,8 @@ test('POS displays quantity without transmitting cost, and cannot finalize check
  assert.match(ui,/Stock: Not initialized/);
  assert.match(ui,/stockMap\.get/);
  assert.match(backend,/checkoutAvailable:false/);
- assert.match(ui,/Card, bank, QR and E-Wallet methods remain unavailable/);
+ assert.match(ui,/PosMultiPayment/);
+ assert.match(read('frontend/src/PosMultiPayment.jsx'),/SARA\/MyKasih and automatic provider transactions require a certified provider connection/);
 });
 test('Inventory installer inspects by default and provisions new tenants after 021, without modifying approved modules',()=>{
  const installer=read('backend/scripts/setup-inventory-foundation.js');
