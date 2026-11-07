@@ -14,9 +14,10 @@ test('Cashier lands directly on POS, never Categories, when pos.view is granted'
  assert.equal(landingPage(model('CASHIER',['categories.view','pos.view'])),'pos');
  assert.equal(landingPage(model('CASHIER',['cash_shifts.view'])),'cash-shifts');
 });
-test('Waiter prefers restaurant tables, kitchen profile while KDS remains unbuilt; staff stock',()=>{
+test('Waiter prefers restaurant tables; KITCHEN receives KDS only with permission; staff stock',()=>{
  assert.equal(landingPage(model('WAITER',['restaurant_tables.view','categories.view'])),'restaurant-tables');
  assert.equal(landingPage(model('KITCHEN',['categories.view'])),'profile');
+ assert.equal(landingPage(model('KITCHEN',['kds.view'])),'kds');
  assert.equal(landingPage(model('STAFF',['inventory.view'])),'inventory');
 });
 test('Dashboard stays first for authorized management; future explicit grants remain effective',()=>{
@@ -42,10 +43,10 @@ test('Profile is available to every signed-in user and implements both protected
  assert.match(profile,/currentPassword:emailPassword/);
  assert.doesNotMatch(profile,/\/users\/\$\{[^}]+\}\/password-reset/);
 });
-test('Order Terminal is permission-driven for WAITER and KDS remains planned',()=>{
+test('Order Terminal is permission-driven for WAITER and KDS is live by permission',()=>{
  assert.match(app,/label:'Order Terminal',icon:ClipboardList,show:canViewOrderTerminal/);
  assert.doesNotMatch(app,/label:'Order Terminal'[^\n]*planned:true/);
- assert.match(app,/label:'KDS'.*planned:true/);
+ assert.match(app,/label:'KDS'.*show:canViewKds/);
  assert.match(app,/disabled=\{Boolean\(entry\.planned\)\}/);
  assert.equal(landingPage(model('WAITER',['order_terminal.view','restaurant_tables.view'])),'order-terminal');
 });

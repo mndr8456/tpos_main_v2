@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useEffect,useState} from 'react';
 import {Wallet,CheckCircle2,Lock,X,ExternalLink,ImagePlus,ShieldCheck} from 'lucide-react';
 import {request,apiUrl} from './api.js';
 import './PosMultiPayment.css';
@@ -19,8 +19,9 @@ function imageData(file){
   const reader=new FileReader();reader.onload=()=>resolve({mimeType:file.type,base64:String(reader.result).split(',')[1]});reader.onerror=()=>reject(Error('Cannot read the payment evidence image.'));reader.readAsDataURL(file);
  });
 }
-export default function PosMultiPayment({current,preview,methods,stockIssues,discountCode,voucherCode,cashReceived,setCashReceived,paymentError,payCash,busy,onClose,onPaid,notify}){
+export default function PosMultiPayment({current,preview,methods,stockIssues,discountCode,voucherCode,cashReceived,setCashReceived,paymentError,payCash,busy,onClose,onPaid,onDisplayMode,onShowDisplay,notify}){
  const [method,setMethod]=useState('CASH'),[attempt,setAttempt]=useState(null),[reference,setReference]=useState(''),[evidence,setEvidence]=useState(null),[evidenceName,setEvidenceName]=useState(''),[verified,setVerified]=useState(false),[error,setError]=useState(''),[working,setWorking]=useState(false);
+ useEffect(()=>{void onDisplayMode?.('CASH');},[current?.draft?.id]);
  const configurations=new Map(methods.map(m=>[m.method_code,m]));
  const active=Boolean(configurations.get(method)),isCash=method==='CASH',hasQr=['DUITNOW_QR','EWALLET'].includes(method);
  const disabled=Boolean(busy||working||stockIssues.length||discountCode.trim()||voucherCode.trim());
@@ -30,11 +31,12 @@ export default function PosMultiPayment({current,preview,methods,stockIssues,dis
  async function select(selected){
   if(!eligible(selected,configurations.get(selected)))return;
   reset();setMethod(selected);
-  if(selected==='CASH')return;
+  if(selected==='CASH'){void onDisplayMode?.('CASH');return;}
   setWorking(true);
   try{
    const next=await request(`/pos/drafts/${current.draft.id}/payments/start`,{method:'POST',body:{requestKey:crypto.randomUUID(),methodCode:selected,expectedVersion:Number(current.draft.version),expectedTotal:total,discountCode:discountCode.trim(),voucherCode:voucherCode.trim()}});
    setAttempt(next);
+   await onDisplayMode?.(['DUITNOW_QR','EWALLET'].includes(selected)?'QR':'MANUAL',next.attemptId);
   }catch(e){setError(e.message);}
   finally{setWorking(false);}
  }
@@ -47,6 +49,7 @@ export default function PosMultiPayment({current,preview,methods,stockIssues,dis
   }catch(e){setError(e.message);notify?.(e.message,true);}finally{setWorking(false);}
  }
  function displayQr(){
+  if(onShowDisplay?.())return;
   if(!attempt?.displayToken)return;
   const url=`${window.location.origin}/customer-display.html#token=${encodeURIComponent(attempt.displayToken)}`;
   // Tokens are in URL fragments and never transmitted in the page request.

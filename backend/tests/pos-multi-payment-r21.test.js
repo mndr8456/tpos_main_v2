@@ -51,7 +51,7 @@ test('R2.1: migration 035 is tenant-local, checks cash-vs-noncash amounts, and i
 });
 test('R2.1: all payment endpoints enforce authentication and the SARA route cannot post',()=>{
  const app=file('backend/src/app.js'),backend=file('backend/src/pos-multi-payment.js');
- for(const x of ['permitted(\'pos.checkout.manual\'),startNonCashPayment','permitted(\'pos.checkout.manual\'),completeManualPayment','permitted(\'pos.view\'),manualPaymentImage','permitted(\'pos.audit\'),getPaymentEvidence'])assert.ok(app.includes(x),x);
+ for(const x of ['permitted(\'pos.checkout.manual\'),customerDisplayAfterPos(\'attempt\'),startNonCashPayment','permitted(\'pos.checkout.manual\'),customerDisplayAfterPos(\'sale\'),completeManualPayment','permitted(\'pos.view\'),manualPaymentImage','permitted(\'pos.audit\'),getPaymentEvidence'])assert.ok(app.includes(x),x);
  assert.match(backend,/if\(!isManualMethod\(input.methodCode\)\)throw err\('POS_OFFICIAL_PROVIDER_REQUIRED'/);
  assert.match(backend,/BEGIN|beginTransaction/);
  assert.match(backend,/FOR UPDATE/);

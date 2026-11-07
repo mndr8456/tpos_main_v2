@@ -2,9 +2,10 @@ import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {
  Search,ScanBarcode,Plus,Minus,Trash2,ShoppingCart,PauseCircle,PlayCircle,RefreshCw,
  History,ShieldAlert,FolderOpen,Lock,Package,UtensilsCrossed,ClipboardList,
- Store,Layers3,ChevronRight,Table2,Wallet,Tag,Box,ArrowRight,X,CheckCircle2,Printer
+ Store,Layers3,ChevronRight,Table2,Wallet,Tag,Box,ArrowRight,X,CheckCircle2,Printer,MonitorPlay
 } from 'lucide-react';
 import {request,apiOrigin} from './api.js';
+import KitchenProgress from './KitchenProgress.jsx';
 import {refreshPage} from './refresh-page.js';
 import {findCheckoutStockBlockers} from './pos-checkout-stock.js';
 import {PosCashReceipt} from './PosCashReceipt.jsx';
@@ -21,7 +22,7 @@ const money=value=>`RM ${Number(value||0).toFixed(2)}`;
 const formatPercent=value=>{const rate=Number(value);return Number.isFinite(rate)?rate.toFixed(2).replace(/\.00$/,'').replace(/(\.\d)0$/,'$1'):null;};
 const settingLabel=(name,setting)=>setting?.enabled&&setting?.registrationConfigured&&formatPercent(setting.rate)!==null?`${name} (${formatPercent(setting.rate)}%)`:name;
 const uuid=()=>crypto.randomUUID();
-const readableError=code=>({POS_OPEN_SHIFT_REQUIRED:'Please open a Cash Shift before starting an order.',POS_ORIGINAL_SHIFT_CLOSED:'The original Cash Shift is closed.',POS_DRAFT_MUST_RESUME:'Resume this held order before editing.',POS_PRODUCT_NOT_AVAILABLE:'Product is inactive or no longer available.',POS_PACKAGES_AND_BUNDLES_PENDING:'This product requires the inventory composition integration.',POS_WHOLE_QUANTITY_REQUIRED:'This product requires a whole-number quantity.',POS_REQUEST_KEY_REUSED:'Duplicate request key used with different data.',POS_STACKING_POLICY_NOT_APPROVED:'Discount and Voucher cannot be stacked yet.',POS_RESTAURANT_TABLES_NOT_CONNECTED:'Restaurant tables and Dine In orders require the table integration.',POS_TABLE_OCCUPIED:'Another active order already uses this table.',POS_TABLE_NOT_AVAILABLE:'This table is reserved, cleaning, or inactive.',POS_TABLE_NOT_IN_BRANCH:'This table does not belong to this branch.',POS_DINE_IN_SELECT_TABLE_FIRST:'Select a table for Dine In first.',POS_CASH_INSUFFICIENT_TENDER:'Cash received must cover the total.',POS_CHECKOUT_TOTAL_CHANGED:'The bill has changed. Refresh the quote before checkout.',POS_DRAFT_VERSION_CHANGED:'Order changed in another session. Refresh and retry.',POS_STOCK_NOT_INITIALIZED:'Opening Stock is required before selling a stock-tracked product.',POS_INSUFFICIENT_STOCK:'Insufficient stock for this sale.',POS_CASH_CHECKOUT_DISCOUNT_VOUCHER_NOT_CONNECTED:'Discount and voucher settlement is not yet connected to checkout.',POS_CASH_METHOD_DISABLED:'Cash payments are disabled for this branch.',POS_CASH_CONCURRENT_RETRY:'Concurrent checkout detected. Retry using the same payment request.',POS_STOCK_QUANTITY_TWO_DECIMALS_ONLY:'Inventory supports at most two decimals of quantity.'})[code]||code||'Operation failed';
+const readableError=code=>({POS_OPEN_SHIFT_REQUIRED:'Please open a Cash Shift before starting an order.',POS_ORIGINAL_SHIFT_CLOSED:'The original Cash Shift is closed.',POS_DRAFT_MUST_RESUME:'Resume this held order before editing.',POS_KDS_DISPATCHED_ORDER_LOCKED:'This kitchen order was already dispatched. Its items/table are frozen; request a separate kitchen add-on order if needed.',POS_KDS_CANCEL_REQUIRED:'Kitchen preparation has started. OWNER/ADMIN must cancel the KDS ticket with a reason before discarding this POS order.',KDS_DISPATCH_DENIED:'Kitchen dispatch permission is required before holding an order with preparation items.',POS_PRODUCT_NOT_AVAILABLE:'Product is inactive or no longer available.',POS_PACKAGES_AND_BUNDLES_PENDING:'This product requires the inventory composition integration.',POS_WHOLE_QUANTITY_REQUIRED:'This product requires a whole-number quantity.',POS_REQUEST_KEY_REUSED:'Duplicate request key used with different data.',POS_STACKING_POLICY_NOT_APPROVED:'Discount and Voucher cannot be stacked yet.',POS_RESTAURANT_TABLES_NOT_CONNECTED:'Restaurant tables and Dine In orders require the table integration.',POS_TABLE_OCCUPIED:'Another active order already uses this table.',POS_TABLE_NOT_AVAILABLE:'This table is reserved, cleaning, or inactive.',POS_TABLE_NOT_IN_BRANCH:'This table does not belong to this branch.',POS_DINE_IN_SELECT_TABLE_FIRST:'Select a table for Dine In first.',POS_CASH_INSUFFICIENT_TENDER:'Cash received must cover the total.',POS_CHECKOUT_TOTAL_CHANGED:'The bill has changed. Refresh the quote before checkout.',POS_DRAFT_VERSION_CHANGED:'Order changed in another session. Refresh and retry.',POS_STOCK_NOT_INITIALIZED:'Opening Stock is required before selling a stock-tracked product.',POS_INSUFFICIENT_STOCK:'Insufficient stock for this sale.',POS_CASH_CHECKOUT_DISCOUNT_VOUCHER_NOT_CONNECTED:'Discount and voucher settlement is not yet connected to checkout.',POS_CASH_METHOD_DISABLED:'Cash payments are disabled for this branch.',POS_CASH_CONCURRENT_RETRY:'Concurrent checkout detected. Retry using the same payment request.',POS_STOCK_QUANTITY_TWO_DECIMALS_ONLY:'Inventory supports at most two decimals of quantity.'})[code]||code||'Operation failed';
 function IconAction({icon:Icon,title,onClick,disabled=false,primary=false}){return <button type="button" className={`pos-icon-button ${primary?'pos-icon-primary':''}`} aria-label={title} title={title} onClick={onClick} disabled={disabled}><Icon size={18}/></button>;}
 function Pill({children,tone='neutral'}){return <span className={`pos-pill pos-pill-${tone}`}>{children}</span>;}
 export const getPosBusinessMode=type=>{
@@ -56,11 +57,16 @@ export default function PosTerminal({profile,notify}){
  const [waiterQueue,setWaiterQueue]=useState([]),[showWaiterQueue,setShowWaiterQueue]=useState(false),[queuePreview,setQueuePreview]=useState(null);
  const [pendingTableId,setPendingTableId]=useState(null);
  const firstAddRequestRef=useRef(null);
+ const customerDisplayWindowRef=useRef(null);
+ const displayPaymentInProgressRef=useRef(false);
+ const lastPaidDisplayRef=useRef(null);
  const [search,setSearch]=useState(''),[barcode,setBarcode]=useState(''),[category,setCategory]=useState('ALL'),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true);
  const [discountCode,setDiscountCode]=useState(''),[voucherCode,setVoucherCode]=useState(''),[preview,setPreview]=useState(null),[audit,setAudit]=useState(null),[showHeld,setShowHeld]=useState(false);
  const [showAdjustments,setShowAdjustments]=useState(false),[showTaxDetails,setShowTaxDetails]=useState(false),[showPayment,setShowPayment]=useState(false),[orderScope,setOrderScope]=useState('TAKE_AWAY');
  const [quoteBusy,setQuoteBusy]=useState(false),[quoteError,setQuoteError]=useState('');
  const [taxRefreshKey,setTaxRefreshKey]=useState(0);
+ const [displayPairReady,setDisplayPairReady]=useState(false);
+ const displaySyncWarningRef=useRef('');
  const [cashReceived,setCashReceived]=useState(''),[receipt,setReceipt]=useState(null),[paymentError,setPaymentError]=useState('');
  const paymentRequestKeyRef=useRef(null);
  const receiptNodeRef=useRef(null);
@@ -73,6 +79,106 @@ export default function PosTerminal({profile,notify}){
  // Refresh the tenant SST quote after returning from settings in another browser tab.
  useEffect(()=>{const refetch=()=>{if(document.visibilityState==='visible')setTaxRefreshKey(n=>n+1);};window.addEventListener('focus',refetch);document.addEventListener('visibilitychange',refetch);return ()=>{window.removeEventListener('focus',refetch);document.removeEventListener('visibilitychange',refetch);};},[]);
  const activeShift=bootstrap.openShifts.find(s=>String(s.branch_id)===branchId);
+ // The live pairing checks permissions against the backend. A stale login
+ // profile must not prevent publishing a newly authorised customer's order.
+ const canPublishDisplay=profile.user.permissions.includes('customer_display.publish')||profile.user.permissions.includes('customer_display.pair')||displayPairReady;
+ // R1.3: Never swallow a failed Cart/Payment publish as if the monitor
+ // synced. The server calculates all money, and the POS sale remains independent
+ // of this optional customer-facing presentation.
+ const publishDisplay=useCallback(async(draftId=null,discount=discountCode,voucher=voucherCode)=>{
+  // Publishing is a best-effort monitor update. POS Hold, Resume, receipt and checkout
+  // must continue even if the second screen is not paired or currently offline.
+  if(!canPublishDisplay||!branchId)return {paired:false};
+  try{
+   const result=await request('/customer-display/publish',{method:'POST',body:{branchId:Number(branchId),draftId:draftId?Number(draftId):null,discountCode:String(discount).trim().toUpperCase(),voucherCode:String(voucher).trim().toUpperCase()}});
+   if(result?.paired===false){
+    throw Error(result?.expired?'CD_PAIR_EXPIRED':'CD_NOT_PAIRED');
+   }
+   // A completed or discarded draft is not an error. Ignore it rather than
+   // treating an optional display update as a failed POS operation.
+   if(result?.ignored)return result;
+   displaySyncWarningRef.current='';return result;
+  }catch(error){
+   const message=readableError(error.message);
+   if(customerDisplayWindowRef.current&&!customerDisplayWindowRef.current.closed&&displaySyncWarningRef.current!==message){
+    displaySyncWarningRef.current=message;
+    notify(`Customer Display cannot sync the order: ${message}. Payment at POS is unaffected.`,true);
+   }
+   throw error;
+  }
+ },[canPublishDisplay,branchId,discountCode,voucherCode,notify]);
+ // POS cart changes normally publish automatically. When payment starts we
+ // explicitly await this readback instead of racing the 300 ms debounce.
+ useEffect(()=>{
+  // Do not overwrite Cash/QR payment mode with an out-of-order ORDER poll.
+  if(!canPublishDisplay||!branchId||showPayment||receipt||displayPaymentInProgressRef.current)return;
+  const timer=setTimeout(()=>{if(displayPaymentInProgressRef.current)return;void publishDisplay(['DRAFT','HELD'].includes(current?.draft?.status)?current.draft.id:null).catch(()=>{});},150);
+  return ()=>clearTimeout(timer);
+ },[publishDisplay,canPublishDisplay,branchId,current?.draft?.id,current?.draft?.version,current?.draft?.status,taxRefreshKey,showPayment,receipt]);
+ const displayMode=useCallback(async(mode,attemptId)=>{
+  if(!canPublishDisplay||!branchId||!current?.draft?.id)return;
+  try{
+   // Server projects the committed POS order itself; do not block the
+   // customer payment screen on a stale browser cart-publish request.
+   await request('/customer-display/payment-mode',{method:'POST',body:{branchId:Number(branchId),draftId:Number(current.draft.id),mode,...(attemptId?{attemptId:Number(attemptId)}:{})}});
+  }catch(error){
+   const message=readableError(error.message);
+   if(customerDisplayWindowRef.current&&!customerDisplayWindowRef.current.closed&&displaySyncWarningRef.current!==message){
+    displaySyncWarningRef.current=message;
+    notify(`Customer Display payment screen failed: ${message}. POS payment is unaffected.`,true);
+   }
+  }
+ },[canPublishDisplay,branchId,current?.draft?.id,notify]);
+ // Customer Display R1.2: this is presentation-only, AFTER POS has posted
+ // the real sale. Failure here never changes a paid sale or blocks its receipt.
+ function announcePaidToDisplay(paidReceipt,draftId){
+  if(!canPublishDisplay||!branchId||!paidReceipt?.saleId||!draftId)return;
+  const ids={branchId:Number(branchId),draftId:Number(draftId),saleId:Number(paidReceipt.saleId)};
+  lastPaidDisplayRef.current=ids;
+  void request('/customer-display/sale-presentation',{method:'POST',body:{...ids,receiptOpen:true}})
+   .then(result=>{if((result.paired===false||result.ignored)&&customerDisplayWindowRef.current&&!customerDisplayWindowRef.current.closed)notify('Payment succeeded, but Customer Display did not receive the receipt. Reopen Customer Display from POS.',true);})
+   .catch(error=>{if(customerDisplayWindowRef.current&&!customerDisplayWindowRef.current.closed)notify(`Payment succeeded, but Customer Display update failed: ${readableError(error.message)}`,true);});
+ }
+ function closePaidReceipt(){
+  const ids=lastPaidDisplayRef.current;
+  if(ids&&canPublishDisplay){
+   void request('/customer-display/sale-presentation',{method:'POST',body:{...ids,receiptOpen:false}}).catch(()=>{});
+  }
+  lastPaidDisplayRef.current=null;setReceipt(null);
+ }
+ async function openCustomerDisplay(){
+  if(!branchId){notify('Open a Cash Shift and select a branch before pairing Customer Display.',true);return;}
+  // A real monitor pairing is independent from any particular order. Reopening
+  // the command while the window is alive must not revoke its existing token.
+  const existing=customerDisplayWindowRef.current;
+  if(existing&&!existing.closed){
+   existing.focus();
+   if(current?.draft&&['DRAFT','HELD'].includes(current.draft.status)){
+    void publishDisplay(current.draft.id).catch(()=>{});
+   }
+   return;
+  }
+  const popup=window.open('about:blank','tpos-customer-display','width=1366,height=768');
+  if(!popup){notify('Allow pop-ups to open Customer Display on your second monitor.',true);return;}
+  try{
+   const result=await request('/customer-display/pair',{method:'POST',body:{branchId:Number(branchId)}});
+   if(result.viewReady!==true||typeof result.token!=='string')throw Error('CD_PAIR_READBACK_FAILED');
+   // The backend validates both pair and publish permissions and confirms the
+   // anonymous viewer can read the session before issuing this token.
+   popup.location.replace(`${window.location.origin}/customer-display.html#pair=${encodeURIComponent(result.token)}`);
+   customerDisplayWindowRef.current=popup;
+   setDisplayPairReady(true);
+   displaySyncWarningRef.current='';
+   notify('Customer Display connected to this cashier and branch. Pair expires after 12 hours.');
+   // A failed optional cart publish must NEVER close a working monitor or turn
+   // POS Hold/Resume into an error. The polling viewer will recover on retry.
+   if(current?.draft&&['DRAFT','HELD'].includes(current.draft.status)){
+    void request('/customer-display/publish',{method:'POST',body:{branchId:Number(branchId),draftId:Number(current.draft.id),discountCode:discountCode.trim().toUpperCase(),voucherCode:voucherCode.trim().toUpperCase()}})
+     .then(synced=>{if(synced?.paired===false)notify('Display paired; the current order has not synced yet. Retry Refresh if needed.',true);})
+     .catch(e=>notify(`Display paired, but order sync needs retry: ${readableError(e.message)}. POS remains available.`,true));
+   }
+  }catch(e){setDisplayPairReady(false);popup.close();notify(`Customer Display pairing failed: ${readableError(e.message)}`,true);}
+ }
  const categoryMap=useMemo(()=>new Map((bootstrap.categories||[]).map(c=>[String(c.id),c.category_name])),[bootstrap.categories]);
  const priceMap=useMemo(()=>new Map((bootstrap.branchPrices||[]).filter(p=>String(p.branch_id)===branchId).map(p=>[String(p.product_id),p.selling_price])),[bootstrap.branchPrices,branchId]);
  const stockMap=useMemo(()=>new Map((bootstrap.stockLevels||[]).filter(x=>String(x.branch_id)===branchId).map(x=>[String(x.product_id),Number(x.quantity_on_hand)])),[bootstrap.stockLevels,branchId]);
@@ -92,7 +198,7 @@ export default function PosTerminal({profile,notify}){
  async function mutate(fn){setBusy(true);try{const data=await fn();setCurrent(data);setPreview(null);await load();return true;}catch(e){notify(readableError(e.message),true);return false;}finally{setBusy(false);}}
  // Opening POS only reads the catalog and saved HELD orders.
  // No blank order is created or reserved in the tenant database.
- function resetOrderControls(){setPendingTableId(null);firstAddRequestRef.current=null;setPaymentError('');setCashReceived('');paymentRequestKeyRef.current=null;setOrderScope('TAKE_AWAY');setDiscountCode('');setVoucherCode('');setPreview(null);setShowPayment(false);setShowAdjustments(false);setShowTaxDetails(false);setAudit(null);}
+ function resetOrderControls(){displayPaymentInProgressRef.current=false;setPendingTableId(null);firstAddRequestRef.current=null;setPaymentError('');setCashReceived('');paymentRequestKeyRef.current=null;setOrderScope('TAKE_AWAY');setDiscountCode('');setVoucherCode('');setPreview(null);setShowPayment(false);setShowAdjustments(false);setShowTaxDetails(false);setAudit(null);}
  async function selectDraft(d){setBusy(true);try{const data=await request(`/pos/drafts/${d.id}`);setCurrent(data);setBranchId(String(data.draft.branch_id));setOrderScope(data.draft.order_scope);setPendingTableId(null);setShowHeld(false);setShowPayment(false);setShowAdjustments(false);setShowTaxDetails(false);setDiscountCode('');setVoucherCode('');setPreview(null);setAudit(null);}catch(e){notify(readableError(e.message),true);}finally{setBusy(false);}}
  async function openWaiterQueue(){
   if(!profile.user.permissions.includes('order_terminal.receive'))return;
@@ -149,7 +255,7 @@ export default function PosTerminal({profile,notify}){
   if(!ok)return;
   if(next==='HELD'||next==='DISCARDED'){
    setCurrent(null);resetOrderControls();
-   notify(next==='HELD'?'Order held. New Order is ready when an item is selected.':'Order discarded.');
+   notify(next==='HELD'?(isFnb&&profile.user.permissions.includes('kds.dispatch')?'Order held and sent to Kitchen automatically (if preparation is required).':'Order held.'):'Order discarded.');
   }else {setPreview(null);notify('Order resumed.');}
  }
  // Recalculate whenever the cart, discount or voucher changes; the server owns
@@ -172,7 +278,8 @@ export default function PosTerminal({profile,notify}){
  function openPayment(){
   if(!current||current.draft.status!=='DRAFT')return notify('Resume this held order before checkout.',true);
   if(quoteBusy||quoteError||!preview?.bill||!preview.cashCheckoutAvailable)return notify('A current valid POS quote is required before checkout.',true);
-  setPaymentError('');setCashReceived(String(preview.bill.total));paymentRequestKeyRef.current=uuid();setShowPayment(true);
+  setPaymentError('');setCashReceived(String(preview.bill.total));paymentRequestKeyRef.current=uuid();displayPaymentInProgressRef.current=true;setShowPayment(true);
+  if(canPublishDisplay)void displayMode('CASH');
  }
  async function payCash(){
   if(checkoutStockBlockers.length){setPaymentError('Resolve the stock issues shown above before Cash Checkout. No payment has been posted.');return;}
@@ -185,6 +292,7 @@ export default function PosTerminal({profile,notify}){
   setPaymentError('');setBusy(true);
   try{
    const result=await request(`/pos/drafts/${current.draft.id}/checkout/cash`,{method:'POST',body:{requestKey,expectedVersion:current.draft.version,expectedTotal:String(preview.bill.total),cashReceived,discountCode:discountCode.trim(),voucherCode:voucherCode.trim()}});
+   announcePaidToDisplay(result.receipt,current.draft.id);
    resetOrderControls();setCurrent(null);setReceipt(result.receipt);await load();
    notify(`Cash payment posted. Receipt ${result.receipt.receiptNumber}.`);
   }catch(e){const message=readableError(e.message);setPaymentError(message);notify(message,true);}
@@ -193,7 +301,7 @@ export default function PosTerminal({profile,notify}){
  async function showAudit(){if(!current)return;try{const result=await request(`/pos/drafts/${current.draft.id}/audit`);setAudit(result.logs);}catch(e){notify(readableError(e.message),true);}}
  function scan(e){e.preventDefault();const code=barcode.trim();if(!code)return;const found=bootstrap.products.find(p=>p.barcode===code||p.sku?.toUpperCase()===code.toUpperCase());if(!found)return notify('Barcode or SKU not found in this tenant.',true);if(found.product_structure!=='SINGLE')return notify('This product requires the packaging/composition adapter.',true);void add(found);setBarcode('');scannerRef.current?.focus();}
  return <main className="page pos-terminal" data-pos-mode={businessMode.mode} data-business-type={businessMode.businessType}>
-  <header className="pos-terminal-header"><div className="pos-title-group"><span className="pos-title-icon">{isFnb?<UtensilsCrossed size={23}/>:<Store size={23}/>}</span><div><p className="eyebrow">OPERATIONS / POS TERMINAL</p><h1>POS Terminal</h1><p className="pos-subheading">{profile.business.name} <span>·</span> {selectedBusiness} <span>·</span> {isFnb?'Food & Beverage':'Retail Counter'}</p></div></div><div className="pos-header-actions"><Pill tone={activeShift?'success':'warning'}>{activeShift?`Shift #${activeShift.id} OPEN`:'No open shift'}</Pill><IconAction icon={RefreshCw} title="Refresh POS" disabled={loading||busy} onClick={()=>{setTaxRefreshKey(n=>n+1);refreshPage(load,notify);}}/><IconAction icon={History} title="Order Activity Log" disabled={!current} onClick={showAudit}/><IconAction icon={FolderOpen} title="Held / Saved Orders" onClick={()=>setShowHeld(true)}/>{profile.user.permissions.includes('order_terminal.receive')&&<IconAction icon={ClipboardList} title="Pending Waiter Orders" onClick={openWaiterQueue}/>}</div></header>
+  <header className="pos-terminal-header"><div className="pos-title-group"><span className="pos-title-icon">{isFnb?<UtensilsCrossed size={23}/>:<Store size={23}/>}</span><div><p className="eyebrow">OPERATIONS / POS TERMINAL</p><h1>POS Terminal</h1><p className="pos-subheading">{profile.business.name} <span>·</span> {selectedBusiness} <span>·</span> {isFnb?'Food & Beverage':'Retail Counter'}</p></div></div><div className="pos-header-actions"><Pill tone={activeShift?'success':'warning'}>{activeShift?`Shift #${activeShift.id} OPEN`:'No open shift'}</Pill>{profile.user.permissions.includes('customer_display.pair')&&<IconAction icon={MonitorPlay} title="Open Customer Display" disabled={!branchId||busy} onClick={openCustomerDisplay}/>}<IconAction icon={RefreshCw} title="Refresh POS" disabled={loading||busy} onClick={()=>{setTaxRefreshKey(n=>n+1);refreshPage(load,notify);}}/><IconAction icon={History} title="Order Activity Log" disabled={!current} onClick={showAudit}/><IconAction icon={FolderOpen} title="Held / Saved Orders" onClick={()=>setShowHeld(true)}/>{profile.user.permissions.includes('order_terminal.receive')&&<IconAction icon={ClipboardList} title="Pending Waiter Orders" onClick={openWaiterQueue}/>}</div></header>
   <div className="pos-operating-bar"><div className="pos-branch"><span>BRANCH / CASH SHIFT</span><select aria-label="Select branch with open cash shift" disabled={busy||Boolean(current)} value={branchId} onChange={e=>setBranchId(e.target.value)}><option value="">Select open shift</option>{bootstrap.openShifts.map(s=><option value={s.branch_id} key={s.id}>{s.branch_name} · Shift #{s.id}</option>)}</select></div><div className="pos-user-meta"><span>CASHIER</span><strong>{profile.user.fullName}</strong><small>{currentBranch?.name||'Open a Cash Shift to begin'}</small></div><div className="pos-type-meta"><span>ORDER TYPE</span><div className="pos-order-switch"><button type="button" className={(current?current.draft.order_scope:orderScope)!=='DINE_IN'?'chosen':''} title="Counter / Take Away" aria-pressed={(current?current.draft.order_scope:orderScope)!=='DINE_IN'} onClick={()=>{if(current?.draft?.order_scope==='DINE_IN'||pendingTableId)assignTable(null);else setOrderScope('TAKE_AWAY');}}>{isFnb?'Take Away':'Counter Sale'}</button>{businessMode.hasTables&&<button type="button" className={(current?current.draft.order_scope:orderScope)==='DINE_IN'?'chosen':''} title="Select a restaurant table below to start Dine In" aria-pressed={(current?current.draft.order_scope:orderScope)==='DINE_IN'} disabled={Boolean(current&&current.draft.status!=='DRAFT')} onClick={()=>document.getElementById('pos-table-select')?.focus()}>Dine In <Table2 size={12}/></button>}</div></div></div>
   <div className="pos-terminal-layout"><section className="pos-product-zone" aria-label={isFnb?'Menu catalog':'Product catalog'}>
    <div className="pos-catalog-toolbar"><div><h2>{isFnb?'Menu & Products':'Products'}</h2><p>Choose an item to add to the current order</p></div><span className="pos-product-count">{products.length} items</span></div>
@@ -211,7 +319,7 @@ export default function PosTerminal({profile,notify}){
    {preview?.sst&&<div className="pos-sst-summary" aria-label="Live GST SST Settings"><SstStatus label="Sales Tax" setting={preview.sst.salesTax}/><SstStatus label="Service Tax" setting={preview.sst.serviceTax}/></div>}
    {showTaxDetails&&<TaxDetails bill={preview?.bill} sst={preview?.sst}/>}
    <BillBreakdown bill={preview?.bill} quoteError={quoteError} quoteBusy={quoteBusy} sst={preview?.sst} serviceCharge={preview?.serviceCharge}/>
-   <div className="pos-order-footer"><div className="pos-actions-secondary">{current&&<><button type="button" className="outline" disabled={busy} onClick={()=>status(current.draft.status==='HELD'?'DRAFT':'HELD')}>{current.draft.status==='HELD'?<PlayCircle size={17}/>:<PauseCircle size={17}/>} {current.draft.status==='HELD'?'Resume':'Hold'}</button><button type="button" className="outline pos-discard" disabled={busy} onClick={()=>status('DISCARDED')}><Trash2 size={17}/> Discard</button></>}</div><button type="button" className="pos-pay-button" disabled={!current||!currentLines.length||busy} onClick={openPayment}><Wallet size={19}/>Payment / Checkout <ArrowRight size={18}/></button></div>
+   {current&&isFnb&&<KitchenProgress kind="pos" orderId={current.draft.id}/>}<div className="pos-order-footer"><div className="pos-actions-secondary">{current&&<><button type="button" className="outline" disabled={busy} onClick={()=>status(current.draft.status==='HELD'?'DRAFT':'HELD')}>{current.draft.status==='HELD'?<PlayCircle size={17}/>:<PauseCircle size={17}/>} {current.draft.status==='HELD'?'Resume':(isFnb&&profile.user.permissions.includes('kds.dispatch')?'Hold & Send to Kitchen':'Hold')}</button><button type="button" className="outline pos-discard" disabled={busy} onClick={()=>status('DISCARDED')}><Trash2 size={17}/> Discard</button></>}</div><button type="button" className="pos-pay-button" disabled={!current||!currentLines.length||busy} onClick={openPayment}><Wallet size={19}/>Payment / Checkout <ArrowRight size={18}/></button></div>
   </aside></div>
   <p className="pos-checkout-scope-note">Cash and manually verified QR / Bank Transfer / external terminal transactions use separate auditable payment ledgers. Provider-connected devices and SARA require certified integrations.</p>
   {showWaiterQueue&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setShowWaiterQueue(false);}}><div className="dialog wide pos-held-dialog"><div className="dialog-head"><div><p className="eyebrow">WAITER / POS HANDOFF</p><h2>Pending Waiter Orders</h2><p>Receive Take Away or Dine In orders into your OPEN Cash Shift. No payment is posted.</p></div><IconAction icon={X} title="Close Waiter Queue" onClick={()=>setShowWaiterQueue(false)}/></div><div className="pos-saved-orders">{waiterQueue.filter(x=>!branchId||String(x.branch_id)===String(branchId)).map(o=><div key={o.id} className="pos-saved-order"><div><b>Waiter #{o.id} · {o.order_scope==='DINE_IN'?`Dine In / Table ${o.table_number||o.table_id}`:'Take Away'}</b><span>{o.branch_name} · {o.waiter_name} · {o.created_at}</span>{o.order_notes&&<small>Notes: {o.order_notes}</small>}</div><button className="outline" type="button" disabled={busy} onClick={()=>previewWaiterOrder(o)} title="Review order products and special instructions">Review</button><button className="primary" type="button" disabled={busy||Boolean(current)||!activeShift||String(activeShift.branch_id)!==String(o.branch_id)} title="Receive into current cashier shift" onClick={()=>claimWaiterOrder(o)}>Receive</button></div>)}{!waiterQueue.filter(x=>!branchId||String(x.branch_id)===String(branchId)).length&&<div className="pos-product-empty"><ClipboardList size={28}/><strong>No pending waiter orders for this branch</strong></div>}{queuePreview&&<div className="pos-waiter-preview"><h3>Waiter Order #{queuePreview.order.id} · {queuePreview.order.order_scope==='DINE_IN'?'Dine In':'Take Away'}</h3>{queuePreview.order.order_notes&&<p>Order Notes: {queuePreview.order.order_notes}</p>}<div className="table-scroll"><table><thead><tr><th>Product</th><th>Qty</th><th>Unit Price</th><th>Special Request</th></tr></thead><tbody>{queuePreview.lines.map(l=><tr key={l.id}><td>{l.product_name}</td><td>{l.quantity}</td><td>{money(l.unit_price)}</td><td>{l.line_notes||'—'}</td></tr>)}</tbody></table></div></div>}</div></div></div>}
@@ -221,10 +329,12 @@ export default function PosTerminal({profile,notify}){
     discountCode={discountCode} voucherCode={voucherCode} cashReceived={cashReceived}
     setCashReceived={value=>{setCashReceived(value);setPaymentError('');paymentRequestKeyRef.current=uuid();}}
     paymentError={paymentError} busy={busy} payCash={payCash} notify={notify}
-    onClose={()=>setShowPayment(false)}
-    onPaid={async paidReceipt=>{resetOrderControls();setCurrent(null);setReceipt(paidReceipt);await load();notify(`Non-cash payment recorded. Receipt ${paidReceipt.receiptNumber}.`);}}
+    onClose={()=>{displayPaymentInProgressRef.current=false;setShowPayment(false);void displayMode('ORDER');}}
+    onDisplayMode={displayMode}
+    onShowDisplay={()=>{const linked=customerDisplayWindowRef.current;if(linked&&!linked.closed){linked.focus();return true;}return false;}}
+    onPaid={async paidReceipt=>{announcePaidToDisplay(paidReceipt,current?.draft?.id);resetOrderControls();setCurrent(null);setReceipt(paidReceipt);await load();notify(`Non-cash payment recorded. Receipt ${paidReceipt.receiptNumber}.`);}}
   />}
-  {receipt&&<div className="overlay"><div className="dialog pos-payment-dialog pos-receipt-dialog"><div className="dialog-head"><div><p className="eyebrow">POS / PAID</p><h2>Payment Receipt</h2></div><IconAction icon={X} title="Close receipt" onClick={()=>setReceipt(null)}/></div><PosCashReceipt receipt={receipt} printRef={receiptNodeRef}/><div className="dialog-actions"><button className="outline" type="button" onClick={()=>setReceipt(null)}>Close</button><button className="primary" type="button" onClick={()=>printPosReceipt(receiptNodeRef.current)}><Printer size={17}/>Print Receipt</button></div></div></div>}
+  {receipt&&<div className="overlay"><div className="dialog pos-payment-dialog pos-receipt-dialog"><div className="dialog-head"><div><p className="eyebrow">POS / PAID</p><h2>Payment Receipt</h2></div><IconAction icon={X} title="Close receipt" onClick={closePaidReceipt}/></div><PosCashReceipt receipt={receipt} printRef={receiptNodeRef}/><div className="dialog-actions"><button className="outline" type="button" onClick={closePaidReceipt}>Close</button><button className="primary" type="button" onClick={()=>printPosReceipt(receiptNodeRef.current)}><Printer size={17}/>Print Receipt</button></div></div></div>}
   {audit&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setAudit(null);}}><div className="dialog wide"><div className="dialog-head"><h2>POS Order Activity Log</h2><IconAction icon={X} title="Close activity log" onClick={()=>setAudit(null)}/></div><div className="table-scroll"><table><thead><tr><th>Time (UTC)</th><th>Action</th><th>Actor</th><th>Details</th></tr></thead><tbody>{audit.map(a=><tr key={a.id}><td>{a.created_at}</td><td>{a.action_type}</td><td>{a.actor_name}</td><td>{typeof a.details==='string'?a.details:JSON.stringify(a.details)}</td></tr>)}{!audit.length&&<tr><td colSpan="4">No activity.</td></tr>}</tbody></table></div></div></div>}
  </main>;
 }

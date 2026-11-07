@@ -9,7 +9,8 @@ test('R1 all existing modules and planned terminals are represented',()=>{
  const keys=ROLE_MODULES.map(m=>m.key);
  assert.equal(new Set(keys).size,keys.length);
  for(const key of ['users','dashboard','categories','suppliers','products','discounts','vouchers','restaurant_tables','pos','cash_shifts','cash_drawer','inventory','payment_methods','sst_settings','service_charge','staff_profiles','attendances','attendance_clock','leave_types','leave_balances','leave_requests','role_permissions'])assert.ok(keys.includes(key),key);
- assert.deepEqual(PLANNED_MODULES.map(m=>m.key),['kds']);
+ assert.deepEqual(PLANNED_MODULES.map(m=>m.key),[]);
+ assert.ok(ROLE_MODULES.some(m=>m.key==='kds'&&m.crud.read==='kds.view'));
  assert.ok(ROLE_MODULES.some(m=>m.key==='order_terminal'&&m.crud.read==='order_terminal.view'));
  assert.deepEqual(ROLE_CODES,['OWNER','ADMIN','HR','ACCOUNTANT','MANAGER','SUPERVISOR','CASHIER','WAITER','KITCHEN','STAFF']);
  for(const m of ROLE_MODULES){assert.deepEqual(Object.keys(m.crud),['create','read','update','delete']);assert.ok(m.crud.read,`No Read for ${m.key}`);}

@@ -39,7 +39,7 @@ test('Cash checkout persistence is one transaction, idempotent, and restricted t
 });
 test('POS checkout and receipt routes are authenticated and permissioned, SARA not marked paid',()=>{
  const app=source('backend/src/app.js'),ui=source('frontend/src/PosTerminal.jsx'),payment=source('frontend/src/PosMultiPayment.jsx'),setup=source('backend/scripts/setup-pos-cash-checkout.js');
- assert.match(app,/permitted\('pos.checkout.cash'\),cashCheckout/);
+ assert.match(app,/permitted\('pos.checkout.cash'\),customerDisplayAfterPos\('sale'\),cashCheckout/);
  assert.match(app,/permitted\('pos.view'\),getCashReceipt/);
  assert.match(setup,/--apply/);assert.match(setup,/POS_INVENTORY_023_REQUIRED/);
  assert.match(payment,/Confirm Cash Payment/);assert.match(payment,/Cash Received \(RM\)/);assert.match(payment,/SARA\/MyKasih and automatic provider transactions require a certified provider connection/);

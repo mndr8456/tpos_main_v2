@@ -1,6 +1,7 @@
 // Waiter-only ordering stage; does not write cash shifts, sales, inventory, voucher, payment or journals.
 import {z} from 'zod';
 import {canAccessBranch,isDineIn,waiterPayloadHash,rejectRepeatedProducts,cashierMayClaim} from './waiter-order-rules.js';
+import {dispatchKitchenTicket,linkWaiterKitchenToPos,cancelPendingKitchenFromWaiter} from './kds-dispatch.js';
 const id=z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const uuid=z.string().uuid();
 const qty=z.string().regex(/^(?:[1-9]\d{0,3})(?:\.\d{1,3})?$|^0\.\d{1,3}$/).refine(v=>Number(v)>0&&Number(v)<=1000);
@@ -37,7 +38,7 @@ export async function waiterBootstrap(req,res){
  CASE WHEN d.id IS NOT NULL OR w.id IS NOT NULL THEN 'OCCUPIED' ELSE t.table_status END AS occupancy
  FROM restaurant_tables t LEFT JOIN pos_drafts d ON d.active_table_id=t.id LEFT JOIN waiter_orders w ON w.active_table_id=t.id
  WHERE t.is_deleted=0 AND t.status='ACTIVE' AND t.branch_id IN (${visible.map(()=>'?').join(',')}) ORDER BY t.branch_id,t.table_area,t.sort_order,t.table_number`,visible.map(b=>b.id)):[[]];
- return noStore(res).json({branches:visible.map(b=>({...b,id:String(b.id)})),products:products.map(p=>({...p,id:String(p.id),category_id:String(p.category_id)})),categories,prices:prices.map(p=>({...p,branch_id:String(p.branch_id),product_id:String(p.product_id)})),tables:tables.map(t=>({...t,id:String(t.id),branch_id:String(t.branch_id)})),orderTypes:['TAKE_AWAY',...(['RESTAURANT','CAFE'].includes(req.auth.company.business_type)?['DINE_IN']:[])],checkout:false,kdsConnected:false});
+ return noStore(res).json({branches:visible.map(b=>({...b,id:String(b.id)})),products:products.map(p=>({...p,id:String(p.id),category_id:String(p.category_id)})),categories,prices:prices.map(p=>({...p,branch_id:String(p.branch_id),product_id:String(p.product_id)})),tables:tables.map(t=>({...t,id:String(t.id),branch_id:String(t.branch_id)})),orderTypes:['TAKE_AWAY',...(['RESTAURANT','CAFE'].includes(req.auth.company.business_type)?['DINE_IN']:[])],checkout:false,kdsConnected:true});
 }
 export async function listWaiterOrders(req,res){
  const [rows]=await req.auth.pool.execute(`${selectOrder} WHERE ${elevated(req)?'1=1':'o.waiter_user_id=?'} ORDER BY o.id DESC LIMIT 200`,elevated(req)?[]:[req.auth.user.id]);
@@ -71,6 +72,9 @@ export async function sendWaiterOrder(req,res){
   const [saved]=await conn.execute('INSERT INTO waiter_orders(request_key,request_hash,branch_id,waiter_user_id,order_scope,table_id,order_notes) VALUES(?,?,?,?,?,?,?)',[data.requestKey,hash,data.branchId,req.auth.user.id,data.orderScope,data.tableId,data.orderNotes]);
   for(const input of data.items){const p=products.get(String(input.productId));await conn.execute(`INSERT INTO waiter_order_lines(order_id,product_id,product_name,sku,barcode,category_id,unit_code,quantity,unit_price,track_stock,product_type,line_notes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,[saved.insertId,p.id,p.product_name,p.sku,p.barcode,p.category_id,p.base_unit_code,input.quantity,String(p.price),p.track_stock?1:0,p.product_type,input.notes]);}
   await audit(conn,req,saved.insertId,'SUBMIT',{scope:data.orderScope,branchId:String(data.branchId),tableId:data.tableId?String(data.tableId):null,lineCount:data.items.length,notes:data.orderNotes});
+  // Dispatch after all line snapshots are persisted, in the SAME transaction.
+  // Cashier Receive later links this ticket, never dispatching a duplicate.
+  await dispatchKitchenTicket(conn,{source:'WAITER',sourceId:saved.insertId,branchId:data.branchId,actorUserId:req.auth.user.id,orderScope:data.orderScope,tableId:data.tableId,orderNotes:data.orderNotes});
   if(data.tableId)await conn.execute("INSERT INTO restaurant_table_audit_logs(table_id,actor_user_id,action_type,details) VALUES(?,?,'ASSIGN',?)",[data.tableId,req.auth.user.id,JSON.stringify({waiterOrderId:String(saved.insertId)})]);
   const result=await resultOrder(conn,req,saved.insertId);await conn.commit();return res.status(201).set('Cache-Control','no-store').json({...result,idempotent:false});
  }catch(e){await conn.rollback();if(e.code==='ER_DUP_ENTRY')throw fail('WAITER_CONCURRENT_SUBMISSION_RETRY',409);if(['ER_LOCK_DEADLOCK','ER_LOCK_WAIT_TIMEOUT'].includes(e.code))throw fail('WAITER_CONCURRENT_RETRY',409);throw e;}finally{conn.release();}
@@ -83,6 +87,8 @@ export async function cancelWaiterOrder(req,res){
   if(reference.table_id)await conn.execute('SELECT id FROM restaurant_tables WHERE id=? FOR UPDATE',[reference.table_id]);
   const [[o]]=await conn.execute('SELECT id,branch_id,waiter_user_id,status,table_id FROM waiter_orders WHERE id=? FOR UPDATE',[orderId]);canRead(req,o);
   if(o.status!=='SUBMITTED')throw fail('WAITER_ORDER_ALREADY_FINAL',409);
+  // Once the kitchen has started, only OWNER/ADMIN KDS cancellation may proceed.
+  await cancelPendingKitchenFromWaiter(conn,orderId,req.auth.user.id,reason);
   await conn.execute("UPDATE waiter_orders SET status='CANCELLED',version=version+1,updated_at=UTC_TIMESTAMP(6) WHERE id=?",[orderId]);
   await audit(conn,req,orderId,'CANCEL',{reason});
   if(o.table_id)await conn.execute("INSERT INTO restaurant_table_audit_logs(table_id,actor_user_id,action_type,details) VALUES(?,?,'RELEASE',?)",[o.table_id,req.auth.user.id,JSON.stringify({waiterOrderId:String(orderId),reason:'CANCELLED'})]);
@@ -127,6 +133,7 @@ export async function claimWaiterOrder(req,res){
   await conn.execute("UPDATE waiter_orders SET status='CLAIMED',pos_draft_id=?,version=version+1,updated_at=UTC_TIMESTAMP(6) WHERE id=?",[saved.insertId,orderId]);
   const logDetails=JSON.stringify({waiterOrderId:String(orderId),waiterId:String(o.waiter_user_id),tableId:o.table_id?String(o.table_id):null,orderNotes:o.order_notes,lineNotes:lines.map(l=>({productId:String(l.product_id),notes:l.line_notes})).filter(x=>x.notes)});
   await conn.execute("INSERT INTO pos_draft_audit_logs(draft_id,actor_user_id,action_type,details) VALUES(?,?,'CREATE',?)",[saved.insertId,req.auth.user.id,logDetails]);
+  await linkWaiterKitchenToPos(conn,orderId,saved.insertId,req.auth.user.id);
   await audit(conn,req,orderId,'CLAIM',{posDraftId:String(saved.insertId),shiftId:String(shift.id)});
   await conn.commit();return res.status(201).set('Cache-Control','no-store').json({message:'WAITER_ORDER_RECEIVED',draftId:String(saved.insertId),idempotent:false});
  }catch(e){await conn.rollback();if(e.code==='ER_DUP_ENTRY')throw fail('WAITER_CLAIM_CONFLICT_RETRY',409);if(['ER_LOCK_DEADLOCK','ER_LOCK_WAIT_TIMEOUT'].includes(e.code))throw fail('WAITER_CONCURRENT_RETRY',409);throw e;}finally{conn.release();}

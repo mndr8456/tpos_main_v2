@@ -21,10 +21,13 @@ import {getSstSettings,saveSstSettings,listSstAudit} from './sst-settings.js';
 import {getServiceChargeSettings,saveServiceChargeSettings,listServiceChargeAudit} from './service-charge.js';
 import {posBootstrap,listPosDrafts,createPosDraft,getPosDraft,addPosLine,changePosLine,changePosDraftStatus,quotePosDraft,posDraftAudit,assignPosTable} from './pos-drafts.js';
 import {waiterBootstrap,listWaiterOrders,getWaiterOrder,sendWaiterOrder,cancelWaiterOrder,waiterQueue,waiterQueueDetail,claimWaiterOrder} from './order-terminal.js';
+import {kdsMeta,kdsBoard,kdsTicket,kdsLineStatus,kdsStationStatus,kdsCancel,kdsAudit,kdsDispatchPos,kdsWaiterStatus,kdsPosStatus} from './kds.js';
 import {tableMeta,listTables,createTable,updateTable,archiveTable,tableAudit,exportTables,tableTemplate,previewTableImport,importTables} from './restaurant-tables.js';
 import {inventoryMeta,inventoryReferenceCosts,inventoryBalances,inventoryMovements,openInventoryBalance,receiveInventory} from './inventory.js';
 import {previewBulkOpening,confirmBulkOpening} from './inventory-opening-bulk.js';
 import {cashCheckout,getCashReceipt} from './pos-cash-checkout.js';
+import {customerDisplayAfterPos} from './customer-display-pos-events.js';
+import {customerDisplaySettings,updateCustomerDisplaySettings,uploadCustomerDisplayMedia,editCustomerDisplayMedia,removeCustomerDisplayMedia,ownerCustomerDisplayAsset,pairCustomerDisplay,publishCustomerDisplay,customerDisplayPaymentMode,customerDisplaySalePresentation,publicCustomerDisplayState,publicCustomerDisplayMedia} from './customer-display.js';
 import {startNonCashPayment,completeManualPayment,manualPaymentImage,publicCustomerDisplay,getPaymentEvidence} from './pos-multi-payment.js';
 import {attendanceMeta,attendanceList,attendanceDetails,createAttendance,updateAttendance,approveAttendance,statusAttendance,attendanceAudit,attendanceTemplate,previewAttendanceImport,confirmAttendanceImport} from './attendances.js';
 import {attendanceClockToday,attendanceClockHistory,attendanceClockPunch,attendanceClockAdminMeta,addOfficeNetwork,disableOfficeNetwork,grantRemoteClock,revokeRemoteClock} from './attendance-clock.js';
@@ -67,6 +70,10 @@ export function createApp(){
  app.use('/api/v2/payment-methods/:branchId/:code/image',express.json({limit:'2mb'}));
  app.use('/api/v2/pos/drafts/:id/payments/:attemptId/complete',express.json({limit:'2mb'}));
  app.use('/api/v2/staff-profiles/:id/image',express.json({limit:'2mb'}));
+ // Authenticate and validate origin before accepting multimedia uploads (16 MB binary maximum).
+ app.use('/api/v2/customer-display/media/upload',(req,res,next)=>{
+  if(!isAllowedRequestOrigin(req))return res.status(403).json({error:'INVALID_ORIGIN'});next();
+ },authenticate,(req,res,next)=>express.json({limit:'17mb'})(req,res,next));
  app.use(express.json({limit:'320kb'}));
  app.use((req,res,next)=>{
   if(!['GET','HEAD','OPTIONS'].includes(req.method)){
@@ -185,21 +192,44 @@ export function createApp(){
  app.get('/api/v2/pos/waiter-queue',authenticate,permitted('order_terminal.receive'),waiterQueue);
  app.get('/api/v2/pos/waiter-queue/:id',authenticate,permitted('order_terminal.receive'),waiterQueueDetail);
  app.post('/api/v2/pos/waiter-queue/:id/claim',authenticate,permitted('order_terminal.receive'),claimWaiterOrder);
+ // KDS R1: tenant-scoped read and write gates. WAITER/CASHIER see only own source status.
+ app.get('/api/v2/kds/meta',authenticate,permitted('kds.view'),kdsMeta);
+ app.get('/api/v2/kds/board',authenticate,permitted('kds.view'),kdsBoard);
+ app.get('/api/v2/kds/tickets/:id',authenticate,permitted('kds.view'),kdsTicket);
+ app.get('/api/v2/kds/tickets/:id/audit',authenticate,permitted('kds.audit'),kdsAudit);
+ app.patch('/api/v2/kds/lines/:id/status',authenticate,permitted('kds.update_status'),kdsLineStatus);
+ app.patch('/api/v2/kds/tickets/:ticketId/stations/:stationId/status',authenticate,permitted('kds.update_status'),kdsStationStatus);
+ app.post('/api/v2/kds/tickets/:id/cancel',authenticate,permitted('kds.cancel'),kdsCancel);
+ app.post('/api/v2/kds/pos/:id/dispatch',authenticate,permitted('kds.dispatch'),kdsDispatchPos);
+ app.get('/api/v2/kds/waiter/:id/status',authenticate,permitted('order_terminal.view'),kdsWaiterStatus);
+ app.get('/api/v2/kds/pos/:id/status',authenticate,permitted('pos.view'),kdsPosStatus);
  app.get('/api/v2/pos/bootstrap',authenticate,permitted('pos.view'),posBootstrap);
  app.get('/api/v2/pos/drafts',authenticate,permitted('pos.view'),listPosDrafts);
- app.post('/api/v2/pos/drafts',authenticate,permitted('pos.cart.manage'),createPosDraft);
- app.get('/api/v2/pos/drafts/:id',authenticate,permitted('pos.view'),getPosDraft);
- app.post('/api/v2/pos/drafts/:id/lines',authenticate,permitted('pos.cart.manage'),addPosLine);
- app.patch('/api/v2/pos/drafts/:id/lines/:lineId',authenticate,permitted('pos.cart.manage'),changePosLine);
- app.patch('/api/v2/pos/drafts/:id/status',authenticate,permitted('pos.cart.manage'),changePosDraftStatus);
- app.patch('/api/v2/pos/drafts/:id/table',authenticate,permitted('pos.cart.manage'),assignPosTable);
- app.post('/api/v2/pos/drafts/:id/quote',authenticate,permitted('pos.view'),quotePosDraft);
- app.post('/api/v2/pos/drafts/:id/checkout/cash',authenticate,permitted('pos.checkout.cash'),cashCheckout);
- app.post('/api/v2/pos/drafts/:id/payments/start',authenticate,permitted('pos.checkout.manual'),startNonCashPayment);
- app.post('/api/v2/pos/drafts/:id/payments/:attemptId/complete',authenticate,permitted('pos.checkout.manual'),completeManualPayment);
+ app.post('/api/v2/pos/drafts',authenticate,permitted('pos.cart.manage'),customerDisplayAfterPos('create'),createPosDraft);
+ app.get('/api/v2/pos/drafts/:id',authenticate,permitted('pos.view'),customerDisplayAfterPos('cart'),getPosDraft);
+ app.post('/api/v2/pos/drafts/:id/lines',authenticate,permitted('pos.cart.manage'),customerDisplayAfterPos('cart'),addPosLine);
+ app.patch('/api/v2/pos/drafts/:id/lines/:lineId',authenticate,permitted('pos.cart.manage'),customerDisplayAfterPos('cart'),changePosLine);
+ app.patch('/api/v2/pos/drafts/:id/status',authenticate,permitted('pos.cart.manage'),customerDisplayAfterPos('cart'),changePosDraftStatus);
+ app.patch('/api/v2/pos/drafts/:id/table',authenticate,permitted('pos.cart.manage'),customerDisplayAfterPos('cart'),assignPosTable);
+ app.post('/api/v2/pos/drafts/:id/quote',authenticate,permitted('pos.view'),customerDisplayAfterPos('cart'),quotePosDraft);
+ app.post('/api/v2/pos/drafts/:id/checkout/cash',authenticate,permitted('pos.checkout.cash'),customerDisplayAfterPos('sale'),cashCheckout);
+ app.post('/api/v2/pos/drafts/:id/payments/start',authenticate,permitted('pos.checkout.manual'),customerDisplayAfterPos('attempt'),startNonCashPayment);
+ app.post('/api/v2/pos/drafts/:id/payments/:attemptId/complete',authenticate,permitted('pos.checkout.manual'),customerDisplayAfterPos('sale'),completeManualPayment);
  app.get('/api/v2/pos/drafts/:id/payments/:attemptId/qr-image',authenticate,permitted('pos.view'),manualPaymentImage);
  app.get('/api/v2/pos/payment-attempts/:attemptId/evidence',authenticate,permitted('pos.audit'),getPaymentEvidence);
- app.post('/api/v2/pos/customer-display/view',publicCustomerDisplay);
+ app.post('/api/v2/pos/customer-display/view',publicCustomerDisplay); // Legacy 15-minute QR-only link retained.
+ app.get('/api/v2/customer-display/settings',authenticate,customerDisplaySettings);
+ app.put('/api/v2/customer-display/settings',authenticate,updateCustomerDisplaySettings);
+ app.post('/api/v2/customer-display/media/upload',uploadCustomerDisplayMedia);
+ app.patch('/api/v2/customer-display/media/:id',authenticate,editCustomerDisplayMedia);
+ app.delete('/api/v2/customer-display/media/:id',authenticate,removeCustomerDisplayMedia);
+ app.get('/api/v2/customer-display/media/:id',authenticate,ownerCustomerDisplayAsset);
+ app.post('/api/v2/customer-display/pair',authenticate,pairCustomerDisplay);
+ app.post('/api/v2/customer-display/publish',authenticate,publishCustomerDisplay);
+ app.post('/api/v2/customer-display/payment-mode',authenticate,customerDisplayPaymentMode);
+ app.post('/api/v2/customer-display/sale-presentation',authenticate,customerDisplaySalePresentation);
+ app.post('/api/v2/customer-display/public/view',publicCustomerDisplayState);
+ app.post('/api/v2/customer-display/public/media',publicCustomerDisplayMedia);
  app.get('/api/v2/pos/sales/:saleId/receipt',authenticate,permitted('pos.view'),getCashReceipt);
  app.get('/api/v2/pos/drafts/:id/audit',authenticate,permitted('pos.audit'),posDraftAudit);
  app.get('/api/v2/payment-methods',authenticate,permitted('payment_methods.view'),listPaymentMethods);

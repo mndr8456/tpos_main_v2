@@ -1,2 +1,38 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>TPOS Customer Display — Payment</title><style>body{margin:0;background:#0a2346;color:#fff;font-family:system-ui,Arial,sans-serif;min-height:100vh;display:grid;place-items:center}main{max-width:620px;width:92%;text-align:center}h1{font-size:30px}#amount{font-size:52px;font-weight:800;color:#78c6ff}#qr{display:none;margin:25px auto;background:white;padding:20px;border-radius:20px;max-width:310px;max-height:320px;object-fit:contain}#status{font-size:24px;font-weight:700;color:#ffcf70}p{color:#c3d8f4;line-height:1.6}small{color:#b7cbe3}</style></head><body><main><h1 id="merchant">Customer Payment</h1><div id="amount"></div><img id="qr" alt="Merchant QR payment code"><div id="status">Connecting...</div><p id="details">Please follow the cashier's instructions.</p><small>Never share a PIN, card number or OTP with a cashier.</small></main>
-<script src="/customer-display.js" defer></script></body></html>
+<!doctype html>
+<html lang="en"><head>
+ <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+ <meta name="referrer" content="no-referrer"><meta http-equiv="Cache-Control" content="no-store">
+ <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; connect-src 'self';">
+ <title>TPOS — Customer Display</title><link rel="stylesheet" href="/customer-display.css">
+ <script src="/customer-display.js" defer></script>
+</head><body>
+ <div id="customer-display" class="display-shell">
+  <header class="display-header"><div class="display-brand"><span class="brand-logo">TPOS</span><div><h1 id="merchant">Customer Display</h1><small id="branch">Welcome</small></div></div><div class="display-connection"><span id="connection-dot"></span><span id="connection">Connecting…</span><button id="fullscreen" title="Full screen" aria-label="Full screen">⛶</button></div></header>
+  <main id="content">
+   <section id="split-view" class="display-split">
+    <div id="order-area" class="display-order">
+     <div id="order-welcome" class="display-welcome"><div class="welcome-symbol">✦</div><h2 id="welcome-message">Welcome!</h2><p>We're happy to serve you.</p></div>
+     <div id="order-current" class="order-current" hidden>
+      <div class="order-head"><span>YOUR ORDER</span><strong id="order-number">Order</strong></div>
+      <div id="order-scope" class="order-scope">TAKE AWAY</div>
+      <div class="order-table-scroll"><table><thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead><tbody id="order-lines"></tbody></table></div>
+      <div class="order-summary"><div class="order-summary-line"><span>Subtotal</span><b id="subtotal">RM 0.00</b></div><div class="order-summary-line"><span>Tax / Service Charge / Rounding</span><b id="charges">RM 0.00</b></div><div class="order-grand"><span>TOTAL</span><b id="grand-total">RM 0.00</b></div></div>
+     </div>
+    </div>
+    <aside id="promotion-area" class="display-promos"><div class="promo-bar"><span>PROMOTIONS</span><span id="promotion-position">Welcome</span></div><div class="promo-stage" id="promotion-stage"><div id="promotion-placeholder" class="promotion-placeholder"><span>✦</span><h2>Something Special for You</h2><p>Enjoy your visit!</p></div><img id="promotion-image" alt="Promotion" hidden><video id="promotion-video" muted playsinline preload="auto" hidden></video></div><div class="promo-footer" id="promotion-footer">Discover our latest promotions</div></aside>
+   </section>
+   <section id="payment-view" class="display-payment" hidden>
+    <div id="payment-status" class="payment-status">Payment</div>
+    <div id="payment-total-label" class="payment-total-label">Amount to Pay</div>
+    <strong id="amount" class="payment-total">RM 0.00</strong>
+    <div id="qr-panel" class="qr-panel" hidden><img id="qr" alt="Merchant payment QR code" hidden><p>Scan to pay using your banking or e-wallet app</p><small>This QR is supplied by the merchant. Verify the amount before payment.</small></div>
+    <div id="cash-panel" class="cash-panel" hidden><div><span>Cash Received</span><b id="cash-received">RM 0.00</b></div><div class="change-highlight"><span>CHANGE / BAKI</span><b id="cash-change">RM 0.00</b></div></div>
+    <div id="status" class="payment-note">Please follow the cashier's instructions.</div>
+    <p id="details" class="payment-details"></p>
+   </section>
+   <section id="success-view" class="display-success" hidden><div class="success-symbol">✓</div><div class="success-subtitle">PAYMENT SUCCESSFUL</div><h2 id="thank-you-english">Thank You, Please Come Again!</h2><p id="thank-you-malay">Terima kasih, sila datang lagi!</p></section>
+   <section id="offline-view" class="display-offline" hidden><h2>Display Not Connected</h2><p id="offline-details">Please ask the cashier to pair this display again.</p></section>
+  </main>
+  <footer class="display-footer"><span>Thank you for shopping with us.</span><span>TPOS Customer Display · No private payment information is shown</span></footer>
+ </div>
+</body></html>

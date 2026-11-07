@@ -9,8 +9,10 @@ export function landingPage(profile){
  if(role==='WAITER' && hasPermission(profile,'order_terminal.view'))return 'order-terminal';
  if(role==='WAITER' && hasPermission(profile,'restaurant_tables.view') && ['RESTAURANT','CAFE'].includes(String(profile?.business?.type||'').toUpperCase()))return 'restaurant-tables';
  if(role==='STAFF' && hasPermission(profile,'inventory.view'))return 'inventory';
- if(role==='KITCHEN')return 'profile'; // KDS is planned, not a live page.
+ if(role==='KITCHEN' && hasPermission(profile,'kds.view'))return 'kds';
+ if(role==='KITCHEN')return 'profile';
  if(hasPermission(profile,'dashboard.view'))return 'dashboard';
+ if(hasPermission(profile,'kds.view'))return 'kds';
  if(hasPermission(profile,'pos.view'))return 'pos';
  if(hasPermission(profile,'users.view'))return 'users';
  if(hasPermission(profile,'restaurant_tables.view') && ['RESTAURANT','CAFE'].includes(String(profile?.business?.type||'').toUpperCase()))return 'restaurant-tables';

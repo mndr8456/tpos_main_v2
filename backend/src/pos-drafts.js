@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {cancelPendingKitchenFromPos,dispatchKitchenTicket} from './kds-dispatch.js';
 import {z} from 'zod';
 import {evaluateDiscount} from './discount-evaluation.js';
 import {evaluateVoucher} from './voucher-evaluation.js';
@@ -57,6 +58,9 @@ async function command(conn,d,action,request,params){
 }
 async function ensureEditable(conn,req,d){
  if(d.status!=='DRAFT')throw bad('POS_DRAFT_MUST_RESUME',409);
+ // Once a kitchen snapshot exists, editing order lines/table would silently desync the KDS ticket.
+ const [[kitchenTicket]]=await conn.execute('SELECT id FROM kds_tickets WHERE pos_draft_id=? LIMIT 1',[d.id]);
+ if(kitchenTicket)throw bad('POS_KDS_DISPATCHED_ORDER_LOCKED',409);
  await activeShift(conn,req,d.branch_id,true);
  const [[shift]]=await conn.execute("SELECT status FROM cash_shifts WHERE id=?",[d.shift_id]);
  if(shift?.status!=='OPEN')throw bad('POS_ORIGINAL_SHIFT_CLOSED',409);
@@ -179,11 +183,25 @@ export async function changePosDraftStatus(req,res){
   if(data.status==='HELD'&&d.status!=='DRAFT')throw bad('POS_ONLY_DRAFT_CAN_HOLD',409);
   const shift=data.status!=='DISCARDED'?await activeShift(conn,req,d.branch_id,true):null;
   if(shift&&String(shift.id)!==String(d.shift_id))throw bad('POS_ORIGINAL_SHIFT_CLOSED',409);
+  if(data.status==='DISCARDED')await cancelPendingKitchenFromPos(conn,d.id,req.auth.user.id);
   if(data.status==='HELD'){
    const [[count]]=await conn.execute('SELECT COUNT(*) AS total FROM pos_draft_lines WHERE draft_id=?',[d.id]);
    if(!Number(count.total))throw bad('POS_CANNOT_HOLD_EMPTY_ORDER',409);
   }
   await conn.execute('UPDATE pos_drafts SET status=?,version=version+1,updated_at=UTC_TIMESTAMP(6) WHERE id=?',[data.status,d.id]);
+  // R1.3: A cashier Hold is also the kitchen dispatch. The ticket and HELD state
+  // commit or roll back together, so the kitchen never receives a phantom order.
+  // The unique POS source key makes retries and explicit KDS dispatch idempotent.
+  if(data.status==='HELD'){
+   if(has(req,'kds.dispatch')){
+    await dispatchKitchenTicket(conn,{source:'POS',sourceId:d.id,branchId:d.branch_id,actorUserId:req.auth.user.id,orderScope:d.order_scope,tableId:d.table_id});
+   }else{
+    // A role without kitchen dispatch permission may Hold an ordinary retail
+    // cart, but cannot silently strand a preparation-required food order.
+    const [[prep]]=await conn.execute('SELECT COUNT(*) AS total FROM pos_draft_lines l JOIN products p ON p.id=l.product_id WHERE l.draft_id=? AND p.requires_preparation=1',[d.id]);
+    if(Number(prep.total)>0)throw bad('KDS_DISPATCH_DENIED',403);
+   }
+  }
   await log(conn,d.id,req.auth.user.id,data.status==='HELD'?'HOLD':data.status==='DRAFT'?'RESUME':'DISCARD',{oldStatus:d.status,status:data.status});
   if(data.status==='DISCARDED'&&d.table_id)await conn.execute('INSERT INTO restaurant_table_audit_logs(table_id,actor_user_id,action_type,details) VALUES(?,?,?,?)',[d.table_id,req.auth.user.id,'RELEASE',JSON.stringify({draftId:String(d.id),reason:'DISCARDED'})]);
   return detail(conn,req,d.id);

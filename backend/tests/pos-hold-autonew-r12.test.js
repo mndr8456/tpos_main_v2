@@ -14,12 +14,12 @@ function mockZod(){
  const v={};for(const name of ['int','positive','max','regex','refine','strict','default','optional','nullable','trim','uuid','min'])v[name]=()=>v;
  v.parse=input=>input;return {coerce:{number:()=>v},number:()=>v,string:()=>v,enum:()=>v,boolean:()=>v,object:()=>v};
 }
-function handlers(){
+function handlers({onDispatch=async()=>{}}={}){
  const code=backend.replace(/^import .*?;\s*$/gm,'').replace(/\bexport\s+(?=async\s+function|function|const\s)/g,'')+'\nglobalThis.api={createPosDraft,changePosDraftStatus};';
- const sandbox={z:mockZod(),createHash,evaluateDiscount:()=>{},evaluateVoucher:()=>{},totalDraftLines:rows=>({lines:rows,subtotal:'10.50'}),format:()=>{},Intl,Date,JSON,Number,String,Error,Object,Promise,Set};
+ const sandbox={z:mockZod(),createHash,dispatchKitchenTicket:onDispatch,evaluateDiscount:()=>{},evaluateVoucher:()=>{},totalDraftLines:rows=>({lines:rows,subtotal:'10.50'}),format:()=>{},Intl,Date,JSON,Number,String,Error,Object,Promise,Set};
  vm.runInNewContext(code,sandbox,{filename:'pos-drafts.js'});return sandbox.api;
 }
-function fixture({hasShift=true,productValid=true,failInsert=false}={}){
+function fixture({hasShift=true,productValid=true,failInsert=false,kdsPermission=false,needsPrep=false}={}){
  let state={drafts:[],lines:[],commands:[],audits:[],nextId:1};
  const conn={snapshot:null,async beginTransaction(){this.snapshot=structuredClone(state)},async commit(){this.snapshot=null},async rollback(){if(this.snapshot)state=this.snapshot;this.snapshot=null},release(){},
   async execute(sql,args=[]){
@@ -37,12 +37,13 @@ function fixture({hasShift=true,productValid=true,failInsert=false}={}){
    if(sql.startsWith('INSERT INTO pos_draft_audit_logs')){state.audits.push({draftId:args[0],action:args[2]});return [{}];}
    if(sql.includes('FROM pos_draft_commands WHERE'))return [[state.commands.find(c=>c.draft_id===Number(args[0])&&c.request_key===args[1])]];
    if(sql.startsWith('INSERT INTO pos_draft_commands')){state.commands.push({draft_id:Number(args[0]),request_key:args[1],request_hash:args[2]});return [{}];}
+   if(sql.startsWith('SELECT COUNT(*) AS total FROM pos_draft_lines l JOIN products p'))return [[{total:needsPrep?state.lines.filter(l=>l.draft_id===Number(args[0])).length:0}]];
    if(sql.startsWith('SELECT COUNT(*) AS total FROM pos_draft_lines'))return [[{total:state.lines.filter(l=>l.draft_id===Number(args[0])).length}]];
    if(sql.startsWith('UPDATE pos_drafts SET status=')){const d=state.drafts.find(x=>x.id===Number(args[1]));d.status=args[0];d.version++;return [{}];}
    throw Error('UNEXPECTED_QUERY: '+sql);
   }
  };
- const req=body=>({body,auth:{pool:{getConnection:async()=>conn},user:{id:7,role_code:'CASHIER',permissions:['pos.cart.manage'],branchIds:['1']},company:{business_type:'RESTAURANT'}}});
+ const req=body=>({body,auth:{pool:{getConnection:async()=>conn},user:{id:7,role_code:'CASHIER',permissions:kdsPermission?['pos.cart.manage','kds.dispatch']:['pos.cart.manage'],branchIds:['1']},company:{business_type:'RESTAURANT'}}});
  const call=async(fn,body,draftId)=>{const res={status(v){this.statusCode=v;return this},json(v){this.payload=v;return this}};await fn({...req(body),params:{id:draftId}},res);return res.payload;};
  const input=()=>({branchId:1,orderScope:'TAKE_AWAY',productId:10,quantity:'1',requestKey:randomUUID()});
  return {get state(){return state},call,input,conn};
@@ -94,4 +95,32 @@ test('Only non-empty HELD orders appear as saved orders',()=>{
  assert.match(backend,/d\.status='HELD' AND EXISTS \(SELECT 1 FROM pos_draft_lines/);
  assert.match(frontend,/setCurrent\(null\);resetOrderControls\(\)/);
  assert.doesNotMatch(frontend,/Your order is being prepared automatically/);
+});
+
+// CD/KDS R1.3 acceptance: Hold commits the KDS ticket atomically, not after
+// reopening Saved Orders. No ticket may persist when the Hold transaction fails.
+test('KDS R1.3 Hold immediately dispatches inside the very same POS transaction',async()=>{
+ const dispatches=[];const h=handlers({onDispatch:async(conn,details)=>{dispatches.push({...details,activeTransaction:Boolean(conn.snapshot)});return {ticketId:'31',hasPreparation:true};}});
+ const db=fixture({kdsPermission:true});const order=await db.call(h.createPosDraft,db.input());
+ const cmd={status:'HELD',expectedVersion:1,requestKey:randomUUID()};
+ const held=await db.call(h.changePosDraftStatus,cmd,order.draft.id);
+ assert.equal(held.draft.status,'HELD');assert.equal(dispatches.length,1);
+ assert.equal(dispatches[0].source,'POS');assert.equal(String(dispatches[0].sourceId),order.draft.id);
+ assert.equal(dispatches[0].activeTransaction,true);
+ await db.call(h.changePosDraftStatus,cmd,order.draft.id);
+ assert.equal(dispatches.length,1,'same Hold replay must not dispatch twice');
+});
+test('KDS R1.3 a failed kitchen dispatch rolls back the HELD status and audit',async()=>{
+ const h=handlers({onDispatch:async()=>{throw Error('KDS_PREPARATION_STATION_INVALID');}});
+ const db=fixture({kdsPermission:true});const order=await db.call(h.createPosDraft,db.input());
+ await assert.rejects(db.call(h.changePosDraftStatus,{status:'HELD',expectedVersion:1,requestKey:randomUUID()},order.draft.id),/KDS_PREPARATION_STATION_INVALID/);
+ assert.equal(db.state.drafts[0].status,'DRAFT');assert.equal(db.state.drafts[0].version,1);
+ assert.equal(db.state.audits.some(x=>x.action==='HOLD'),false);
+});
+
+test('KDS R1.3 a cashier lacking dispatch permission cannot Hold preparation-required items silently',async()=>{
+ const h=handlers(),db=fixture({needsPrep:true,kdsPermission:false});
+ const order=await db.call(h.createPosDraft,db.input());
+ await assert.rejects(db.call(h.changePosDraftStatus,{status:'HELD',expectedVersion:1,requestKey:randomUUID()},order.draft.id),/KDS_DISPATCH_DENIED/);
+ assert.equal(db.state.drafts[0].status,'DRAFT');
 });

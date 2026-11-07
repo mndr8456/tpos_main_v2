@@ -1,5 +1,6 @@
 // TPOS R1: explicit real endpoint capabilities; new modules with their own CRUD keys are discovered dynamically.
 export const ROLE_MODULES = [
+  {"key":"kds","name":"Kitchen Display System (KDS)","crud":{"create":null,"read":"kds.view","update":"kds.update_status","delete":null}},
   {"key":"order_terminal","name":"Order Terminal","crud":{"create":"order_terminal.create","read":"order_terminal.view","update":null,"delete":null}},
   {
     "key": "users",
@@ -122,6 +123,16 @@ export const ROLE_MODULES = [
     }
   },
   {
+    "key": "customer_display",
+    "name": "Customer Display",
+    "crud": {
+      "create": null,
+      "read": "customer_display.view",
+      "update": "customer_display.manage",
+      "delete": null
+    }
+  },
+  {
     "key": "payment_methods",
     "name": "Payment Methods",
     "crud": {
@@ -222,9 +233,7 @@ export const ROLE_MODULES = [
     }
   }
 ];
-export const PLANNED_MODULES = [
-  {"key":"kds","name":"Kitchen Display System (KDS)","planned":true,"crud":{"create":null,"read":null,"update":null,"delete":null}}
-];
+export const PLANNED_MODULES = [];
 export const ROLE_CODES = ["OWNER", "ADMIN", "HR", "ACCOUNTANT", "MANAGER", "SUPERVISOR", "CASHIER", "WAITER", "KITCHEN", "STAFF"];
 export const HIDDEN_PERMISSIONS = new Set(["leave_requests.import"]);
 export function isVisibleSpecial(code) {return /^[a-z][a-z_]*\.[a-z][a-z_.]*$/.test(code) && !/\.(import|export)(\.|$)/.test(code) && !HIDDEN_PERMISSIONS.has(code);}
