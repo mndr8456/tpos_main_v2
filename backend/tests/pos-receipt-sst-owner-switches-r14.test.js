@@ -11,12 +11,13 @@ function fixture(salesOn,serviceOn){
  const conn={async execute(sql){queries.push(sql);
   if(sql.includes('FROM pos_sales s JOIN branches'))return [[{id:1,posted_time:'2026-11-02 20:13:34',branch_name:'Main Branch',cashier_name:'Hakim bin Othman',order_scope:'TAKE_AWAY',subtotal:'10.03',total:'10.05',sales_tax:'0.00',service_tax:'0.00',service_charge:'0.00',rounding_adjustment:'0.02',cash_received:'20.00',cash_change:'9.95'}]];
   if(sql.includes('FROM pos_sale_lines'))return [[{product_name:'POS Checkout Test',quantity:'1.00',unit_price:'10.03',line_total:'10.03'}]];
+  if(sql.includes('FROM pos_sale_receipt_footers'))return [[]];
   if(sql.includes('FROM company_profiles'))return [[{registered_name:'Restoran Selera Aqim Tom Yam',address_line1:'18, Jalan TPS 1/2',address_line2:'Taman Pelangi Semenyih',postcode:'43500',city:'Semenyih',state:'Selangor',country:'MY',phone:'0136547891',email:'hakim@gmail.com'}]];
   if(sql.includes('FROM company_registrations'))return [[{ssm_registration_number:'202012345678',ssm_old_registration_number:'KT-365478',sst_sales_tax_number:'S10-1234-000012',sst_service_tax_number:'W10-2003-32000013'}]];
   if(sql.includes('FROM sst_tax_settings'))return [[{tax_type:'SALES_TAX',is_enabled:salesOn?1:0},{tax_type:'SERVICE_TAX',is_enabled:serviceOn?1:0}]];
   throw Error('Unexpected SQL '+sql);
  }};
- const sandbox=vm.createContext({str:value=>String(value),legacyReceiptNumber});
+ const sandbox=vm.createContext({str:value=>String(value),legacyReceiptNumber,DEFAULT_RECEIPT_FOOTER:'Thank you.'});
  vm.runInContext(receiptFunction+'\nglobalThis.readReceipt=receipt;',sandbox);
  return {read:()=>sandbox.readReceipt(conn,1),queries};
 }
@@ -40,8 +41,8 @@ test('Receipt template matches approved V1 address/contact, tax registrations, m
  const jsx=readFileSync(new URL('../../frontend/src/PosCashReceipt.jsx',import.meta.url),'utf8');
  const css=readFileSync(new URL('../../frontend/src/PosCashReceipt.css',import.meta.url),'utf8');
  assert.ok(jsx.indexOf('r.phone&&')<jsx.indexOf('r.email&&'));
- assert.ok(jsx.indexOf('r.email&&')<jsx.indexOf('r.salesTaxNumber&&'));
- assert.ok(jsx.indexOf('r.salesTaxNumber&&')<jsx.indexOf('r.serviceTaxNumber&&'));
+ assert.ok(jsx.indexOf('r.email&&')<jsx.indexOf('(r.serviceTaxNumber||r.salesTaxNumber)'));
+ assert.ok(jsx.indexOf('r.serviceTaxNumber&&')<jsx.indexOf('r.salesTaxNumber&&'));
  assert.ok(jsx.indexOf('pos-receipt-title')<jsx.indexOf('pos-receipt-metadata'));
  for(const field of ['Receipt No.','Date','Branch','Cashier','Total Before Rounding','Grand Total (MYR)','Cash Tendered','Change'])assert.ok(jsx.includes(field),field);
  assert.match(css,/grid-template-columns:90px 9px minmax\(0,1fr\)/);

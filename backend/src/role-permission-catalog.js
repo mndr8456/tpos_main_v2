@@ -123,6 +123,11 @@ export const ROLE_MODULES = [
     }
   },
   {
+    "key": "receipt_settings",
+    "name": "Receipt Settings",
+    "crud": {"create": null,"read": "receipt_settings.view","update": "receipt_settings.manage","delete": null}
+  },
+  {
     "key": "customer_display",
     "name": "Customer Display",
     "crud": {

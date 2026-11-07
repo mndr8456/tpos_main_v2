@@ -36,12 +36,15 @@ export function PosCashReceipt({receipt:r,printRef}){
  return <section ref={printRef} className="pos-print-receipt" aria-label="Payment receipt">
   <header className="pos-receipt-company">
    <h3>{r.registeredName||r.companyName}</h3>
-   {r.ssmNumber&&<p>SSM: {r.ssmNumber}{r.ssmOldNumber?` (${r.ssmOldNumber})`:''}</p>}
+   {(r.ssmNumber||r.ssmOldNumber)&&<p>{r.ssmNumber||''}{r.ssmOldNumber?`(${r.ssmOldNumber})`:''}</p>}
    {address.map((line,i)=><p key={i}>{line}</p>)}
    {r.phone&&<p>Tel: {r.phone}</p>}
    {r.email&&<p>{r.email}</p>}
-   {r.salesTaxNumber&&<p>Sales Tax Registration: {r.salesTaxNumber}</p>}
-   {r.serviceTaxNumber&&<p>Service Tax Registration: {r.serviceTaxNumber}</p>}
+   {(r.serviceTaxNumber||r.salesTaxNumber)&&<div className="pos-receipt-sst">
+    <p>SST REG. No.:</p>
+    {r.serviceTaxNumber&&<p>{r.serviceTaxNumber} (Service Tax)</p>}
+    {r.salesTaxNumber&&<p>{r.salesTaxNumber} (Sales Tax)</p>}
+   </div>}
   </header>
   <h3 className="pos-receipt-title">RECEIPT</h3>
   <div className="pos-receipt-section pos-receipt-metadata">
@@ -72,6 +75,6 @@ export function PosCashReceipt({receipt:r,printRef}){
    {r.paymentMethod==='CASH'&&<><Line label="Cash Tendered" value={r.cashReceived}/><Line label="Change" value={r.cashChange}/></>}
    {r.paymentMethod!=='CASH'&&r.paymentReference&&<div className="pos-receipt-metadata"><span>Transaction Reference: {r.paymentReference}</span></div>}
   </div>
-  <footer className="pos-receipt-footer">Thank you.</footer>
+  <footer className="pos-receipt-footer">{r.footerMessage??'Thank you.'}</footer>
  </section>;
 }

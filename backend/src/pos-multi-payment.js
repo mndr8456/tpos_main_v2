@@ -1,3 +1,4 @@
+import {captureReceiptFooter} from './receipt-settings.js';
 // Tenant-scoped manually VERIFIED non-cash POS checkout.
 // External terminal approval is entered from a real physical receipt by the cashier;
 // it is NOT described as an API-confirmed/online-integrated provider payment.
@@ -175,6 +176,7 @@ export async function completeManualPayment(req,res){
   const [sale]=await conn.execute(`INSERT INTO pos_sales(request_key,draft_id,branch_id,shift_id,cashier_user_id,table_id,order_scope,payment_method,subtotal,sales_tax,sales_tax_rate_pct,service_tax,service_tax_rate_pct,service_charge,service_charge_rate_pct,rounding_adjustment,total,cost_of_goods,cash_received,cash_change)
  VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,[attempt.request_key,draftId,draft.branch_id,draft.shift_id,req.auth.user.id,draft.table_id,draft.order_scope,attempt.method_code,quote.bill.subtotalBeforeTax,quote.bill.salesTax,rateSnapshot.salesTaxRate,quote.bill.serviceTax,rateSnapshot.serviceTaxRate,quote.bill.serviceCharge,rateSnapshot.serviceChargeRate,fmtSen(BigInt(quote.bill.roundingAdjustmentSen)),quote.bill.total,fmtSen(cogs),'0.00','0.00']);
   const saleId=sale.insertId;
+  await captureReceiptFooter(conn,saleId);
   const receiptNumber=await assignPosReceiptNumber(conn,saleId);
   for(const line of subtotal.lines){
    const movement=issued.get(str(line.product_id));

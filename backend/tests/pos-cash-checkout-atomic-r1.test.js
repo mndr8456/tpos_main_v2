@@ -13,8 +13,10 @@ const chain={int(){return this},positive(){return this},max(){return this},regex
 const z={coerce:{number:()=>chain},object:()=>chain,string:()=>chain,uuid:()=>chain,number:()=>chain};
 // The real receipt-number writer participates in the mocked atomic transaction.
 const saleTaxRateSnapshot=()=>({salesTaxRate:null,serviceTaxRate:null,serviceChargeRate:null});
+const DEFAULT_RECEIPT_FOOTER='Thank you.';
+const captureReceiptFooter=async(conn,saleId)=>{const [saved]=await conn.execute('INSERT INTO pos_sale_receipt_footers(sale_id,footer_message) SELECT ?,footer_message FROM receipt_settings WHERE id=1',[saleId]);if(saved.affectedRows!==1)throw Error('RECEIPT_SETTINGS_NOT_INITIALIZED');};
 function checkoutHarness(){
- const ctx={z,randomUUID,createHash,inventoryIssue,makePosCashJournal,totalDraftLines,parseSen,fmtSen,saleTaxRateSnapshot,assignPosReceiptNumber,legacyReceiptNumber,console,Map,JSON,BigInt,Number,String,Error,Set,Promise};
+ const ctx={z,randomUUID,createHash,inventoryIssue,makePosCashJournal,totalDraftLines,parseSen,fmtSen,saleTaxRateSnapshot,assignPosReceiptNumber,legacyReceiptNumber,captureReceiptFooter,DEFAULT_RECEIPT_FOOTER,console,Map,JSON,BigInt,Number,String,Error,Set,Promise};
  const text=source.replace(/^import .*?;$/gm,'').replace(/export async function /g,'async function ').replace(/export function /g,'function ');
  const sandbox=vm.createContext(ctx);vm.runInContext(text+'\nglobalThis.cashCheckoutHarness=cashCheckout;',sandbox);
  return sandbox.cashCheckoutHarness;
@@ -38,6 +40,7 @@ function fixture({stock='10.00',failOn='',saleExists=false}={}){
   if(sql.startsWith("SELECT receipt_number,DATE_FORMAT(posted_at"))return [[{receipt_number:null,receipt_prefix:'2026111200'}]];
   if(sql.startsWith('SELECT s.*,DATE_FORMAT(s.posted_at'))return [[sale]];
   if(sql.startsWith('SELECT product_name,sku,quantity,unit_price,line_total,inventory_cost FROM pos_sale_lines'))return [[{product_name:'Nasi',quantity:'5.000',unit_price:'5.0000',line_total:'25.00',inventory_cost:'17.50'}]];
+  if(sql.includes('FROM pos_sale_receipt_footers WHERE sale_id=?'))return [[{footer_message:'Thank you.'}]];
   if(sql.startsWith('SELECT registered_name,trading_name'))return [[{registered_name:'Test Business',address_line1:'Test Street',city:'Kajang',postcode:'43000',state:'Selangor'}]];
   if(sql.startsWith('SELECT ssm_registration_number'))return [[{ssm_registration_number:'SSM-TEST'}]];
   if(sql.startsWith('SELECT tax_type,is_enabled FROM sst_tax_settings'))return [[{tax_type:'SALES_TAX',is_enabled:1},{tax_type:'SERVICE_TAX',is_enabled:0}]];
@@ -53,12 +56,14 @@ const get=checkoutHarness();
 // The quote function is intentionally stubbed here; the authoritative quote itself has dedicated SST/tax tests.
 const calculateDraftQuote=async(_conn,_req,_draftId,_codes)=>({bill:{total:'25.00',subtotalBeforeTax:'25.00',salesTax:'0.00',serviceTax:'0.00',serviceCharge:'0.00',roundingAdjustmentSen:0}});
 // Inject quote into the handler's module context for deterministic tenant DB tests.
-function handler(){const sandbox=vm.createContext({z,randomUUID,createHash,inventoryIssue,makePosCashJournal,totalDraftLines,parseSen,fmtSen,calculateDraftQuote,saleTaxRateSnapshot,assignPosReceiptNumber,legacyReceiptNumber,console,Map,JSON,BigInt,Number,String,Error,Set,Promise});const s=source.replace(/^import .*?;$/gm,'').replace(/export async function /g,'async function ').replace(/export function /g,'function ');vm.runInContext(s+'\nglobalThis.handler=cashCheckout;',sandbox);return sandbox.handler;}
+function handler(){const sandbox=vm.createContext({z,randomUUID,createHash,inventoryIssue,makePosCashJournal,totalDraftLines,parseSen,fmtSen,calculateDraftQuote,saleTaxRateSnapshot,assignPosReceiptNumber,legacyReceiptNumber,captureReceiptFooter,DEFAULT_RECEIPT_FOOTER,console,Map,JSON,BigInt,Number,String,Error,Set,Promise});const s=source.replace(/^import .*?;$/gm,'').replace(/export async function /g,'async function ').replace(/export function /g,'function ');vm.runInContext(s+'\nglobalThis.handler=cashCheckout;',sandbox);return sandbox.handler;}
 test('Cash checkout commits a single sale, stock issue, journal, cash received and receipt',async()=>{
  const f=fixture();await handler()(f.req,f.res);
  assert.equal(f.res.statusCode,201);assert.equal(f.res.value.receipt.total,'25.00');assert.equal(f.res.value.receipt.cashChange,'5.00');
  assert.deepEqual(f.stats(),{commits:1,rollbacks:0,released:1});
  assert.equal(f.writes.filter(x=>x.includes('INSERT INTO pos_sales(')).length,1);
+ assert.equal(f.writes.filter(x=>x.includes('INSERT INTO pos_sale_receipt_footers(')).length,1);
+ assert.equal(f.res.value.receipt.footerMessage,'Thank you.');
  assert.equal(f.writes.filter(x=>x.includes('INSERT INTO inventory_movements(')).length,1);
  assert.equal(f.writes.filter(x=>x.includes('INSERT INTO accounting_journal_lines(')).length,4);
  assert.ok(f.writes.some(x=>x.includes("status='COMPLETED'")));

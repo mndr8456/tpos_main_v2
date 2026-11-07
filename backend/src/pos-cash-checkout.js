@@ -1,3 +1,4 @@
+import {captureReceiptFooter,DEFAULT_RECEIPT_FOOTER} from './receipt-settings.js';
 // Tenant-local cash-only checkout. No external provider payments or voucher redemption.
 // All durable changes commit or roll back together on a single InnoDB connection.
 import {randomUUID,createHash} from 'node:crypto';
@@ -17,7 +18,8 @@ export async function receipt(conn,saleId){
  const [[sale]]=await conn.execute("SELECT s.*,DATE_FORMAT(s.posted_at,'%Y-%m-%d %H:%i:%s') AS posted_time,b.name AS branch_name,u.full_name AS cashier_name FROM pos_sales s JOIN branches b ON b.id=s.branch_id JOIN users u ON u.id=s.cashier_user_id WHERE s.id=?",[saleId]);
  if(!sale)throw err('POS_SALE_NOT_FOUND',404);
  const [lines]=await conn.execute('SELECT product_name,sku,quantity,unit_price,line_total,inventory_cost FROM pos_sale_lines WHERE sale_id=? ORDER BY id',[saleId]);
- const [[company]]=await conn.execute('SELECT registered_name,trading_name,address_line1,address_line2,city,postcode,state,country,phone,email FROM company_profiles WHERE id=1');
+ const [[company]]=await conn.execute('SELECT registered_name,trading_name,address_line1,address_line2,address_line3,city,postcode,state,country,phone,email FROM company_profiles WHERE id=1');
+ const [[footer]]=await conn.execute('SELECT footer_message FROM pos_sale_receipt_footers WHERE sale_id=?',[saleId]);
  const [[registration]]=await conn.execute('SELECT ssm_registration_number,ssm_old_registration_number,sst_sales_tax_number,sst_service_tax_number FROM company_registrations WHERE id=1');
  const [[paymentAttempt]]=(!sale.payment_method||sale.payment_method==='CASH')?[[]]:await conn.execute('SELECT payment_reference,verification_mode FROM pos_payment_attempts WHERE sale_id=? LIMIT 1',[saleId]);
  const [sstSwitches]=await conn.execute('SELECT tax_type,is_enabled FROM sst_tax_settings ORDER BY tax_type');
@@ -31,9 +33,10 @@ export async function receipt(conn,saleId){
   serviceTaxNumber:enabledTax.has('SERVICE_TAX')?(registration?.sst_service_tax_number||''):'',
   addressLines:company?[
    [company.address_line1,company.address_line2].filter(Boolean).join(', '),
+   company.address_line3,
    [company.postcode,company.city].filter(Boolean).join(' ')+(company.state?`, ${company.state}`:'')+(company.country?`. ${company.country}`:'')
   ].filter(Boolean):[],
-  phone:company?.phone||'',email:company?.email||'',
+  phone:company?.phone||'',email:company?.email||'',footerMessage:footer?.footer_message??DEFAULT_RECEIPT_FOOTER,
   branchName:sale.branch_name,cashierName:sale.cashier_name,postedAtUtc:sale.posted_time,
   orderScope:sale.order_scope,tableId:sale.table_id?str(sale.table_id):null,
   lines,subtotal:str(sale.subtotal),salesTax:str(sale.sales_tax),serviceTax:str(sale.service_tax),
@@ -106,6 +109,7 @@ export async function cashCheckout(req,res){
   const [saved]=await conn.execute(`INSERT INTO pos_sales(request_key,draft_id,branch_id,shift_id,cashier_user_id,table_id,order_scope,payment_method,subtotal,sales_tax,sales_tax_rate_pct,service_tax,service_tax_rate_pct,service_charge,service_charge_rate_pct,rounding_adjustment,total,cost_of_goods,cash_received,cash_change)
    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,[data.requestKey,draftId,draft.branch_id,draft.shift_id,req.auth.user.id,draft.table_id,draft.order_scope,'CASH',quote.bill.subtotalBeforeTax,quote.bill.salesTax,rateSnapshot.salesTaxRate,quote.bill.serviceTax,rateSnapshot.serviceTaxRate,quote.bill.serviceCharge,rateSnapshot.serviceChargeRate,fmtSen(BigInt(quote.bill.roundingAdjustmentSen)),total,fmtSen(cogs),fmtSen(paid),fmtSen(paid-due)]);
   const saleId=saved.insertId;
+  await captureReceiptFooter(conn,saleId);
   const receiptNumber=await assignPosReceiptNumber(conn,saleId);
   for(const line of subtotal.lines){
    const movement=issued.get(str(line.product_id));

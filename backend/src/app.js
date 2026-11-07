@@ -1,3 +1,4 @@
+import {getReceiptSettings,saveReceiptSettings,getReceiptSettingsAudit} from './receipt-settings.js';
 import {getCompanyProfile,updateCompanyProfile,getCompanyProfileAudit} from './company-profile.js';
 import {getRolePermissions,updateRolePermissions,getRolePermissionAudit,rolePermissionReader,rolePermissionEditor} from './role-permissions.js';
 import express from 'express';
@@ -92,6 +93,9 @@ export function createApp(){
  app.get('/api/v2/role-permissions',authenticate,rolePermissionReader,getRolePermissions);
  app.get('/api/v2/role-permissions/audit',authenticate,rolePermissionReader,permitted('role_permissions.audit'),getRolePermissionAudit);
  app.put('/api/v2/role-permissions',authenticate,rolePermissionEditor,updateRolePermissions);
+ app.get('/api/v2/receipt-settings',authenticate,permitted('receipt_settings.view'),getReceiptSettings);
+ app.put('/api/v2/receipt-settings',authenticate,permitted('receipt_settings.manage'),saveReceiptSettings);
+ app.get('/api/v2/receipt-settings/audit',authenticate,permitted('receipt_settings.audit'),getReceiptSettingsAudit);
  app.get('/api/v2/company-profile',authenticate,permitted('company_profile.view'),getCompanyProfile);
  app.put('/api/v2/company-profile',authenticate,permitted('company_profile.manage'),updateCompanyProfile);
  app.get('/api/v2/company-profile/audit',authenticate,permitted('company_profile.audit'),getCompanyProfileAudit);
