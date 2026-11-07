@@ -1,3 +1,4 @@
+import {getCompanyProfile,updateCompanyProfile,getCompanyProfileAudit} from './company-profile.js';
 import {getRolePermissions,updateRolePermissions,getRolePermissionAudit,rolePermissionReader,rolePermissionEditor} from './role-permissions.js';
 import express from 'express';
 import helmet from 'helmet';
@@ -91,6 +92,9 @@ export function createApp(){
  app.get('/api/v2/role-permissions',authenticate,rolePermissionReader,getRolePermissions);
  app.get('/api/v2/role-permissions/audit',authenticate,rolePermissionReader,permitted('role_permissions.audit'),getRolePermissionAudit);
  app.put('/api/v2/role-permissions',authenticate,rolePermissionEditor,updateRolePermissions);
+ app.get('/api/v2/company-profile',authenticate,permitted('company_profile.view'),getCompanyProfile);
+ app.put('/api/v2/company-profile',authenticate,permitted('company_profile.manage'),updateCompanyProfile);
+ app.get('/api/v2/company-profile/audit',authenticate,permitted('company_profile.audit'),getCompanyProfileAudit);
  app.get('/api/v2/dashboard/overview',authenticate,permitted('dashboard.view'),dashboardOverview);
  app.get('/api/v2/attendance-clock/today',authenticate,permitted('attendance_clock.view'),attendanceClockToday);
  app.get('/api/v2/attendance-clock/history',authenticate,permitted('attendance_clock.view'),attendanceClockHistory);
