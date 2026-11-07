@@ -139,12 +139,36 @@ export default function PosTerminal({profile,notify}){
    .then(result=>{if((result.paired===false||result.ignored)&&customerDisplayWindowRef.current&&!customerDisplayWindowRef.current.closed)notify('Payment succeeded, but Customer Display did not receive the receipt. Reopen Customer Display from POS.',true);})
    .catch(error=>{if(customerDisplayWindowRef.current&&!customerDisplayWindowRef.current.closed)notify(`Payment succeeded, but Customer Display update failed: ${readableError(error.message)}`,true);});
  }
+ // Request a fresh server-authoritative poll in the *same* paired monitor.
+ // Never send a pairing token or a fabricated paid/idle state across windows.
+ function refreshPairedDisplay(){
+  const monitor=customerDisplayWindowRef.current;
+  if(!monitor||monitor.closed)return;
+  try{monitor.postMessage({type:'TPOS_CUSTOMER_DISPLAY_REFRESH'},window.location.origin);}catch{}
+ }
  function closePaidReceipt(){
   const ids=lastPaidDisplayRef.current;
+  lastPaidDisplayRef.current=null;
+  setReceipt(null);
   if(ids&&canPublishDisplay){
-   void request('/customer-display/sale-presentation',{method:'POST',body:{...ids,receiptOpen:false}}).catch(()=>{});
-  }
-  lastPaidDisplayRef.current=null;setReceipt(null);
+   void request('/customer-display/sale-presentation',{method:'POST',body:{...ids,receiptOpen:false}})
+    .then(()=>refreshPairedDisplay())
+    .catch(error=>{
+     // The paired viewer keeps polling; do not lose a posted sale just because
+     // its optional presentation close request could not reach the server.
+     notify(`Customer Display refresh failed: ${readableError(error.message)}. Payment is already recorded.`,true);
+     refreshPairedDisplay();
+    });
+  }else refreshPairedDisplay();
+ }
+ // afterprint fires when Chrome's print preview / print dialog exits.
+ // Closing the modal before this point starts the Thank You countdown while
+ // the user is still printing, making the display appear stuck or out of sync.
+ function printAndCloseReceipt(){
+  try{
+   const started=printPosReceipt(receiptNodeRef.current,closePaidReceipt);
+   if(!started)notify('Receipt printing could not start.',true);
+  }catch(error){notify(`Receipt printing failed: ${readableError(error.message)}`,true);}
  }
  async function openCustomerDisplay(){
   if(!branchId){notify('Open a Cash Shift and select a branch before pairing Customer Display.',true);return;}
@@ -158,9 +182,18 @@ export default function PosTerminal({profile,notify}){
    }
    return;
   }
-  const popup=window.open('about:blank','tpos-customer-display','width=1366,height=768');
+  // Reattach a named monitor if the POS tab was refreshed. Opening
+  // 'about:blank' here destroys a live display and its secure URL fragment.
+  const popup=window.open('','tpos-customer-display','width=1366,height=768');
   if(!popup){notify('Allow pop-ups to open Customer Display on your second monitor.',true);return;}
   try{
+   // Existing same-origin CD with a valid live session: focus, never rotate its
+   // token. This also works when the React POS component has been reloaded.
+   if(popup.location.pathname==='/customer-display.html'&&popup.document.getElementById('connection')?.textContent==='Connected'){
+    customerDisplayWindowRef.current=popup;setDisplayPairReady(true);popup.focus();
+    if(current?.draft&&['DRAFT','HELD'].includes(current.draft.status))void publishDisplay(current.draft.id).catch(()=>{});
+    return;
+   }
    const result=await request('/customer-display/pair',{method:'POST',body:{branchId:Number(branchId)}});
    if(result.viewReady!==true||typeof result.token!=='string')throw Error('CD_PAIR_READBACK_FAILED');
    // The backend validates both pair and publish permissions and confirms the
@@ -334,7 +367,7 @@ export default function PosTerminal({profile,notify}){
     onShowDisplay={()=>{const linked=customerDisplayWindowRef.current;if(linked&&!linked.closed){linked.focus();return true;}return false;}}
     onPaid={async paidReceipt=>{announcePaidToDisplay(paidReceipt,current?.draft?.id);resetOrderControls();setCurrent(null);setReceipt(paidReceipt);await load();notify(`Non-cash payment recorded. Receipt ${paidReceipt.receiptNumber}.`);}}
   />}
-  {receipt&&<div className="overlay"><div className="dialog pos-payment-dialog pos-receipt-dialog"><div className="dialog-head"><div><p className="eyebrow">POS / PAID</p><h2>Payment Receipt</h2></div><IconAction icon={X} title="Close receipt" onClick={closePaidReceipt}/></div><PosCashReceipt receipt={receipt} printRef={receiptNodeRef}/><div className="dialog-actions"><button className="outline" type="button" onClick={closePaidReceipt}>Close</button><button className="primary" type="button" onClick={()=>printPosReceipt(receiptNodeRef.current)}><Printer size={17}/>Print Receipt</button></div></div></div>}
+  {receipt&&<div className="overlay"><div className="dialog pos-payment-dialog pos-receipt-dialog"><div className="dialog-head"><div><p className="eyebrow">POS / PAID</p><h2>Payment Receipt</h2></div><IconAction icon={X} title="Close receipt" onClick={closePaidReceipt}/></div><PosCashReceipt receipt={receipt} printRef={receiptNodeRef}/><div className="dialog-actions"><button className="outline" type="button" onClick={closePaidReceipt}>Close</button><button className="primary" type="button" onClick={printAndCloseReceipt}><Printer size={17}/>Print Receipt</button></div></div></div>}
   {audit&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setAudit(null);}}><div className="dialog wide"><div className="dialog-head"><h2>POS Order Activity Log</h2><IconAction icon={X} title="Close activity log" onClick={()=>setAudit(null)}/></div><div className="table-scroll"><table><thead><tr><th>Time (UTC)</th><th>Action</th><th>Actor</th><th>Details</th></tr></thead><tbody>{audit.map(a=><tr key={a.id}><td>{a.created_at}</td><td>{a.action_type}</td><td>{a.actor_name}</td><td>{typeof a.details==='string'?a.details:JSON.stringify(a.details)}</td></tr>)}{!audit.length&&<tr><td colSpan="4">No activity.</td></tr>}</tbody></table></div></div></div>}
  </main>;
 }

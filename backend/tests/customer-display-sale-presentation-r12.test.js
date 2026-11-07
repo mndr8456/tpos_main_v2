@@ -73,7 +73,7 @@ function backendHarness({hasSale=true,hasSession=true,paidMethod='CASH',elapsedS
   async execute(sql,args=[]){
    logs.push({sql,args});
    if(sql.includes('FROM customer_display_sessions WHERE branch_id=? AND cashier_user_id=? FOR UPDATE'))return [hasSession?[{...stored}]:[]];
-   if(sql.includes('UTC_TIMESTAMP(6)>? AS expired'))return [[{expired:0}]];
+   if(sql.includes('SELECT expires_at<=UTC_TIMESTAMP(6) AS expired FROM customer_display_sessions WHERE id=?'))return [[{expired:0}]];
    if(sql.includes('SELECT status FROM pos_drafts WHERE id=? AND branch_id=? AND cashier_user_id=?'))return [[{status:previousStatus}]];
    if(sql.includes('FROM pos_sales WHERE id=? AND draft_id=?')){
     assert.deepEqual([...args],[51,30,1,10]);

@@ -20,7 +20,7 @@ function harness(){
  const writes=[];
  const conn={async beginTransaction(){},async commit(){},async rollback(){},release(){},async execute(q,args=[]){
   if(q.includes('FROM customer_display_sessions WHERE branch_id=? AND cashier_user_id=? FOR UPDATE'))return [[{...session}]];
-  if(q.includes('UTC_TIMESTAMP(6)>? AS expired'))return [[{expired:0}]];
+  if(q.includes('SELECT expires_at<=UTC_TIMESTAMP(6) AS expired FROM customer_display_sessions WHERE id=?'))return [[{expired:0}]];
   if(q.startsWith('SELECT d.id,d.branch_id,d.cashier_user_id,d.status'))return [[{...draft}]];
   if(q.startsWith('SELECT product_name,quantity,unit_price FROM pos_draft_lines'))return [[{product_name:'Nasi Goreng',quantity:'1.000',unit_price:'10.0000'}]];
   if(q.startsWith('UPDATE customer_display_sessions SET draft_id=?')){session.draft_id=args[0];session.mode='ORDER';session.snapshot=args[1];writes.push(q);return [{affectedRows:1}];}

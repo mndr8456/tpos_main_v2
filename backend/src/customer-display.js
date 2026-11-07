@@ -110,13 +110,20 @@ async function lockedSession(conn,req,branchId){
  const [[row]]=await conn.execute('SELECT * FROM customer_display_sessions WHERE branch_id=? AND cashier_user_id=? FOR UPDATE',[branchId,req.auth.user.id]);
  return row||null;
 }
+// R1.6: DATETIME(6) is a database-local value. Never round-trip the expiry through
+// a mysql2 Date/JS timezone conversion: the public viewer and cashier must agree.
+async function sessionExpired(conn,session){
+ const [[row]]=await conn.execute('SELECT expires_at<=UTC_TIMESTAMP(6) AS expired FROM customer_display_sessions WHERE id=?',[session.id]);
+ if(!row)throw failure('CD_PAIR_INVALID',404);
+ return Number(row.expired)===1;
+}
 export async function publishCustomerDisplay(req,res){
  const {branchId,draftId,discountCode,voucherCode}=bodyPublish.parse(req.body);requireCashier(req,'customer_display.publish',branchId);
  const conn=await req.auth.pool.getConnection();try{await conn.beginTransaction();
   const session=await lockedSession(conn,req,branchId);
   if(!session){await conn.commit();return res.json({paired:false});}
-  const [[expiry]]=await conn.execute('SELECT UTC_TIMESTAMP(6)>? AS expired',[session.expires_at]);
-  if(expiry.expired){await conn.commit();return res.json({paired:false,expired:true});}
+  const expired=await sessionExpired(conn,session);
+  if(expired){await conn.commit();return res.json({paired:false,expired:true});}
   if(draftId===null){
    // Preserve success screen after checkout; viewer computes real sale state from the POS ledger.
    const [[paid]]=session.draft_id?await conn.execute('SELECT id FROM pos_sales WHERE draft_id=? LIMIT 1',[session.draft_id]):[[]];
@@ -147,7 +154,7 @@ export async function customerDisplayPaymentMode(req,res){
  const conn=await req.auth.pool.getConnection();try{await conn.beginTransaction();
   const session=await lockedSession(conn,req,input.branchId);
   if(!session||String(session.draft_id)!==String(input.draftId))throw failure('CD_SESSION_ORDER_MISMATCH');
-  const [[expiry]]=await conn.execute('SELECT UTC_TIMESTAMP(6)>? AS expired',[session.expires_at]);if(expiry.expired)throw failure('CD_PAIR_EXPIRED');
+  const expired=await sessionExpired(conn,session);if(expired)throw failure('CD_PAIR_EXPIRED');
   const [[draft]]=await conn.execute('SELECT status FROM pos_drafts WHERE id=? AND branch_id=? AND cashier_user_id=?',[input.draftId,input.branchId,req.auth.user.id]);
   if(!draft||draft.status!=='DRAFT')throw failure('CD_ORDER_NOT_ACTIVE');
   let attemptId=null;
@@ -170,8 +177,8 @@ export async function customerDisplaySalePresentation(req,res){
  try{await conn.beginTransaction();
   const session=await lockedSession(conn,req,input.branchId);
   if(!session){await conn.commit();return res.json({paired:false});}
-  const [[expiry]]=await conn.execute('SELECT UTC_TIMESTAMP(6)>? AS expired',[session.expires_at]);
-  if(expiry.expired){await conn.commit();return res.json({paired:false,expired:true});}
+  const expired=await sessionExpired(conn,session);
+  if(expired){await conn.commit();return res.json({paired:false,expired:true});}
   // The browser supplies identifiers only. The authoritative sale lookup checks
   // cashier, branch and draft against the ledger, including idempotent retries.
   const [[sale]]=await conn.execute('SELECT id,payment_method FROM pos_sales WHERE id=? AND draft_id=? AND branch_id=? AND cashier_user_id=? LIMIT 1',[input.saleId,input.draftId,input.branchId,req.auth.user.id]);

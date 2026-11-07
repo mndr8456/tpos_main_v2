@@ -10,7 +10,8 @@ test('R2.1.4: POS receipt print uses a dedicated frame, not the fixed POS overla
  const pos = src('PosTerminal.jsx');
  const printer = src('pos-receipt-print.js');
  assert.match(pos, /import\s*\{printPosReceipt\}\s*from\s*['"]\.\/pos-receipt-print\.js['"]/);
- assert.match(pos, /onClick=\{\(\)=>printPosReceipt\(receiptNodeRef\.current\)\}/);
+ assert.match(pos, /onClick=\{printAndCloseReceipt\}/);
+ assert.match(pos, /printPosReceipt\(receiptNodeRef\.current,closePaidReceipt\)/);
  assert.doesNotMatch(pos, /onClick=\{\(\)=>window\.print\(\)\}/);
  assert.match(printer, /document\.createElement\('iframe'\)/);
  assert.match(printer, /doc\.body\.appendChild\(receiptCopy\)/);
@@ -35,5 +36,5 @@ test('R2.1.4: print geometry is isolated from other module print CSS and fits th
  assert.match(printer, /@page\{size:\$\{PAPER_WIDTH_MM\}mm \$\{pageHeightMm\}mm;margin:0\}/);
  assert.match(printer, /body>\.pos-print-receipt\{position:static!important/);
  assert.match(printer, /cloneNode\(true\)/);
- assert.match(printer, /addEventListener\('afterprint', cleanup/);
+ assert.match(printer, /addEventListener\('afterprint', finish/);
 });

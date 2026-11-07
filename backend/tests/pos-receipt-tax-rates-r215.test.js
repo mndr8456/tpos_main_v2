@@ -97,6 +97,6 @@ test('R2.1.5: installer is read-only by default, preserves tenant identity, futu
 });
 test('R2.1.5: leaves approved R2.1.4 single-page printer unchanged',()=>{
  const pos=src('frontend/src/PosTerminal.jsx'),printer=src('frontend/src/pos-receipt-print.js');
- assert.match(pos,/printPosReceipt\(receiptNodeRef\.current\)/);
+ assert.match(pos,/printPosReceipt\(receiptNodeRef\.current,closePaidReceipt\)/);
  assert.match(printer,/receiptPageHeightMm\(receiptHeight, pixelsPerMm\)/);
 });

@@ -20,7 +20,7 @@ function makeHarness(){
   async beginTransaction(){},async commit(){},async rollback(){},release(){},
   async execute(sql,args=[]){
    if(sql.includes('FROM customer_display_sessions WHERE branch_id=? AND cashier_user_id=? FOR UPDATE'))return [[{...session}]];
-   if(sql.includes('UTC_TIMESTAMP(6)>? AS expired'))return [[{expired:0}]];
+   if(sql.includes('SELECT expires_at<=UTC_TIMESTAMP(6) AS expired FROM customer_display_sessions WHERE id=?'))return [[{expired:0}]];
    if(sql.startsWith('SELECT d.id,d.branch_id,d.cashier_user_id,d.status'))return [[draft]];
    if(sql.startsWith('SELECT product_name,quantity,unit_price FROM pos_draft_lines'))return [[{product_name:'Tomyam',quantity:'2.000',unit_price:'12.7000'}]];
    if(sql.startsWith('UPDATE customer_display_sessions SET draft_id=?')){

@@ -14,7 +14,7 @@ export function receiptPageHeightMm(contentHeightPx, pixelsPerMm = 96 / 25.4) {
  return Math.max(MIN_HEIGHT_MM, Math.min(MAX_HEIGHT_MM, Math.ceil(contentHeightPx / pixelsPerMm + 10)));
 }
 
-export function printPosReceipt(receiptNode) {
+export function printPosReceipt(receiptNode, onAfterPrint) {
  if (!receiptNode?.classList?.contains('pos-print-receipt')) return false;
  const frame = document.createElement('iframe');
  frame.title = 'POS receipt print document';
@@ -59,9 +59,20 @@ export function printPosReceipt(receiptNode) {
   const pageStyle = doc.createElement('style');
   pageStyle.textContent = `@page{size:${PAPER_WIDTH_MM}mm ${pageHeightMm}mm;margin:0}`;
   doc.head.appendChild(pageStyle);
-  printableWindow.addEventListener('afterprint', cleanup, {once:true});
-  // Some print drivers do not dispatch afterprint when a job is cancelled.
-  cleanupTimer = setTimeout(cleanup, 60000);
+  // Print dialogs can block JavaScript. Never dismiss the paid receipt at the
+  // moment print() is invoked: start the Owner's display countdown AFTER the
+  // dialog is closed (printed OR cancelled).
+  let finished = false;
+  const finish = () => {
+   if (finished) return;
+   finished = true;
+   cleanup();
+   if (typeof onAfterPrint === 'function') onAfterPrint();
+  };
+  printableWindow.addEventListener('afterprint', finish, {once:true});
+  // Driver fallback: some devices never dispatch afterprint. This keeps a
+  // cancelled print job from leaving an invisible frame / paid modal forever.
+  cleanupTimer = setTimeout(finish, 60000);
   printableWindow.focus();
   printableWindow.print();
   return true;

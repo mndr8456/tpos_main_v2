@@ -104,7 +104,9 @@ test('CD R1: browser erases fragment token and polls in same origin with omitted
  assert.match(viewer,/history\.replaceState/);
  assert.match(viewer,/credentials:'omit'/);
  assert.match(viewer,/setInterval\(poll,2000\)/);
- assert.doesNotMatch(viewer,/localStorage|sessionStorage|document\.cookie/);
+ // R1.6: tab-scoped sessionStorage survives Refresh; durable localStorage and cookies remain forbidden.
+ assert.match(viewer,/window\.sessionStorage/);
+ assert.doesNotMatch(viewer,/window\.localStorage|document\.cookie/);
 });
 test('CD R1: slides and muted video play inside the promotion area',()=>{
  const html=read('frontend/public/customer-display.html');

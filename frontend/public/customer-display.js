@@ -1,9 +1,22 @@
-// Customer Display R1 uses an in-memory, read-only pairing token. Never store in
-// persistent browser storage, cookies, analytics, query strings or media URLs.
+// Customer Display R1.6: bearer token is isolated to THIS display tab's
+// sessionStorage, so Refresh does not disconnect the already-paired monitor.
+// Never use durable browser storage, cookies, analytics, query strings or media URLs.
+// The backend continues to enforce the 12-hour pairing expiry and tenant scope.
 (()=>{
  'use strict';
+ const PAIR_KEY='tpos_cd_pair_session_r16';
+ const validPair=value=>typeof value==='string'&&/^[1-9]\d{0,14}\.[A-Za-z0-9_-]{43}$/.test(value);
+ // A tab-scoped store survives reload and discards the token when its window
+ // closes. In privacy-restricted browsers without it, live pairing still works.
+ let tabStorage=null;
+ try{tabStorage=window.sessionStorage||null;}catch{}
  const fragment=new URLSearchParams(location.hash.slice(1));
- const token=fragment.get('pair'),legacyToken=fragment.get('token');
+ const freshPair=fragment.get('pair');
+ const legacyToken=fragment.get('token');
+ let savedPair=null;
+ try{savedPair=tabStorage?.getItem(PAIR_KEY)||null;}catch{}
+ let token=validPair(freshPair)?freshPair:validPair(savedPair)?savedPair:null;
+ if(validPair(freshPair))try{tabStorage?.setItem(PAIR_KEY,freshPair);}catch{}
  history.replaceState(null,'',location.pathname);
  const el=id=>document.getElementById(id);
  const show=(id,on)=>{el(id).hidden=!on;};
@@ -111,14 +124,25 @@
     update({status:state,merchantName:legacy.merchantName||'TPOS',branchName:'Payment QR',order:null,amount:legacy.amount,qr:legacy.qrImage?{mime:legacy.qrMime,base64:legacy.qrImage}:null,media:[],settings:{}});
    }else disconnected('Open POS Terminal and select Open Customer Display to pair this screen.');
   }catch(error){
-   // Keep the original token in memory, and retry automatically. Display errors
-   // reflect the actual API response rather than falsely claiming expiry.
+   // Only a definitive revoked/expired token clears this tab's session pairing.
+   // A transient network/proxy failure retains it and retries on the next poll.
    const detail=String(error?.message||'CD_API_ERROR').replace(/[^A-Za-z0-9 _·.\-]/g,'').slice(0,100);
-   disconnected(`Connection unavailable (${detail}). Retrying automatically. If it persists, open Customer Display again from POS Terminal.`);
+   if(/CD_PAIR_INVALID/.test(detail)){
+    token=null;
+    try{tabStorage?.removeItem(PAIR_KEY);}catch{}
+    disconnected('Pairing has expired or was replaced. Open Customer Display from POS to pair again.');
+   }else disconnected(`Connection unavailable (${detail}). Retrying automatically. If it persists, open Customer Display again from POS Terminal.`);
   }
   finally{working=false;}
  }
  el('fullscreen').addEventListener('click',()=>{if(!document.fullscreenElement)document.documentElement.requestFullscreen?.().catch(()=>{});else document.exitFullscreen?.().catch(()=>{});});
+ // A same-origin signal from the cashier eliminates the wait for the next
+ // 2-second poll after print. The viewer ALWAYS fetches the real server state.
+ // This cannot set SUCCESS/IDLE locally or access the session pairing token.
+ window.addEventListener('message',event=>{
+  if(event.origin!==window.location.origin||event.source!==window.opener)return;
+  if(event.data?.type==='TPOS_CUSTOMER_DISPLAY_REFRESH')void poll();
+ });
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll();});
  poll();setInterval(poll,2000);
  window.addEventListener('pagehide',()=>{cleanMedia();for(const url of mediaCache.values())URL.revokeObjectURL(url);mediaCache.clear();});
