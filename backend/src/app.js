@@ -1,4 +1,6 @@
+import {issueEinvoiceRequest,publicRequestDetails,submitPublicRequest} from './einvoice-requests-r12.js';
 import {getReceiptSettings,saveReceiptSettings,getReceiptSettingsAudit} from './receipt-settings.js';
+import {getEinvoiceSettings,saveEinvoiceSettings,testEinvoiceConnection,getEinvoiceSettingsAudit} from './einvoice-settings.js';
 import {getCompanyProfile,updateCompanyProfile,getCompanyProfileAudit} from './company-profile.js';
 import {getRolePermissions,updateRolePermissions,getRolePermissionAudit,rolePermissionReader,rolePermissionEditor} from './role-permissions.js';
 import express from 'express';
@@ -93,6 +95,13 @@ export function createApp(){
  app.get('/api/v2/role-permissions',authenticate,rolePermissionReader,getRolePermissions);
  app.get('/api/v2/role-permissions/audit',authenticate,rolePermissionReader,permitted('role_permissions.audit'),getRolePermissionAudit);
  app.put('/api/v2/role-permissions',authenticate,rolePermissionEditor,updateRolePermissions);
+ app.get('/api/v2/einvoice/public/request/:token',publicRequestDetails);
+ app.post('/api/v2/einvoice/public/request/:token',submitPublicRequest);
+ app.post('/api/v2/einvoice/requests/issue/:saleId',authenticate,permitted('pos.view'),issueEinvoiceRequest);
+ app.get('/api/v2/einvoice-settings',authenticate,permitted('einvoice_settings.view'),getEinvoiceSettings);
+ app.put('/api/v2/einvoice-settings',authenticate,permitted('einvoice_settings.manage'),saveEinvoiceSettings);
+ app.post('/api/v2/einvoice-settings/test',authenticate,permitted('einvoice_settings.manage'),testEinvoiceConnection);
+ app.get('/api/v2/einvoice-settings/audit',authenticate,permitted('einvoice_settings.audit'),getEinvoiceSettingsAudit);
  app.get('/api/v2/receipt-settings',authenticate,permitted('receipt_settings.view'),getReceiptSettings);
  app.put('/api/v2/receipt-settings',authenticate,permitted('receipt_settings.manage'),saveReceiptSettings);
  app.get('/api/v2/receipt-settings/audit',authenticate,permitted('receipt_settings.audit'),getReceiptSettingsAudit);

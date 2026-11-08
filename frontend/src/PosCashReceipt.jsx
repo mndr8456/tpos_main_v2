@@ -1,5 +1,6 @@
 import React from 'react';
 import './PosCashReceipt.css';
+import {requestQrPath} from './einvoice-request-qr.js';
 
 const number=value=>Number(value||0).toFixed(2);
 const asMoney=value=>number(value);
@@ -28,6 +29,7 @@ function dateMalaysia(value){
 function Line({label,value,emphasis=false}){
  return <div className={`pos-receipt-money-line${emphasis?' pos-receipt-money-strong':''}`}><span>{label}</span><span>{asMoney(value)}</span></div>;
 }
+function RequestQr({url}){const qr=requestQrPath(url);return <svg className="einvoice-request-qr" role="img" aria-label="Scan to request e-Invoice" xmlns="http://www.w3.org/2000/svg" viewBox={`0 0 ${qr.viewSize} ${qr.viewSize}`}><rect width="100%" height="100%" fill="white"/><path fill="#131313" d={qr.path}/></svg>;}
 export function PosCashReceipt({receipt:r,printRef}){
  const address=Array.isArray(r.addressLines)&&r.addressLines.length?r.addressLines:(r.address?[r.address]:[]);
  const showSalesTax=r.salesTaxRate!=null||Number(r.salesTax)!==0;
@@ -76,5 +78,6 @@ export function PosCashReceipt({receipt:r,printRef}){
    {r.paymentMethod!=='CASH'&&r.paymentReference&&<div className="pos-receipt-metadata"><span>Transaction Reference: {r.paymentReference}</span></div>}
   </div>
   <footer className="pos-receipt-footer">{r.footerMessage??'Thank you.'}</footer>
+  {r.einvoiceRequestUrl&&<div className="pos-receipt-einvoice-request"><RequestQr url={r.einvoiceRequestUrl}/><strong>REQUEST E-INVOICE</strong><span>Scan to submit your buyer details</span></div>}
  </section>;
 }

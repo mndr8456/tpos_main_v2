@@ -326,7 +326,10 @@ export default function PosTerminal({profile,notify}){
   try{
    const result=await request(`/pos/drafts/${current.draft.id}/checkout/cash`,{method:'POST',body:{requestKey,expectedVersion:current.draft.version,expectedTotal:String(preview.bill.total),cashReceived,discountCode:discountCode.trim(),voucherCode:voucherCode.trim()}});
    announcePaidToDisplay(result.receipt,current.draft.id);
-   resetOrderControls();setCurrent(null);setReceipt(result.receipt);await load();
+   let paidReceipt=result.receipt;
+   // Best effort only: QR provisioning can never undo a successfully posted sale.
+   try{const link=await request(`/einvoice/requests/issue/${result.receipt.saleId}`,{method:'POST',body:{}});if(link.available&&link.url)paidReceipt={...result.receipt,einvoiceRequestUrl:link.url};}catch{ /* Receipt remains printable without QR. */ }
+   resetOrderControls();setCurrent(null);setReceipt(paidReceipt);await load();
    notify(`Cash payment posted. Receipt ${result.receipt.receiptNumber}.`);
   }catch(e){const message=readableError(e.message);setPaymentError(message);notify(message,true);}
   finally{setBusy(false);}
@@ -365,7 +368,7 @@ export default function PosTerminal({profile,notify}){
     onClose={()=>{displayPaymentInProgressRef.current=false;setShowPayment(false);void displayMode('ORDER');}}
     onDisplayMode={displayMode}
     onShowDisplay={()=>{const linked=customerDisplayWindowRef.current;if(linked&&!linked.closed){linked.focus();return true;}return false;}}
-    onPaid={async paidReceipt=>{announcePaidToDisplay(paidReceipt,current?.draft?.id);resetOrderControls();setCurrent(null);setReceipt(paidReceipt);await load();notify(`Non-cash payment recorded. Receipt ${paidReceipt.receiptNumber}.`);}}
+    onPaid={async paidReceipt=>{announcePaidToDisplay(paidReceipt,current?.draft?.id);let issued=paidReceipt;try{const link=await request(`/einvoice/requests/issue/${paidReceipt.saleId}`,{method:'POST',body:{}});if(link.available&&link.url)issued={...paidReceipt,einvoiceRequestUrl:link.url};}catch{/* Preserve posted noncash receipt. */}resetOrderControls();setCurrent(null);setReceipt(issued);await load();notify(`Non-cash payment recorded. Receipt ${paidReceipt.receiptNumber}.`);}}
   />}
   {receipt&&<div className="overlay"><div className="dialog pos-payment-dialog pos-receipt-dialog"><div className="dialog-head"><div><p className="eyebrow">POS / PAID</p><h2>Payment Receipt</h2></div><IconAction icon={X} title="Close receipt" onClick={closePaidReceipt}/></div><PosCashReceipt receipt={receipt} printRef={receiptNodeRef}/><div className="dialog-actions"><button className="outline" type="button" onClick={closePaidReceipt}>Close</button><button className="primary" type="button" onClick={printAndCloseReceipt}><Printer size={17}/>Print Receipt</button></div></div></div>}
   {audit&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setAudit(null);}}><div className="dialog wide"><div className="dialog-head"><h2>POS Order Activity Log</h2><IconAction icon={X} title="Close activity log" onClick={()=>setAudit(null)}/></div><div className="table-scroll"><table><thead><tr><th>Time (UTC)</th><th>Action</th><th>Actor</th><th>Details</th></tr></thead><tbody>{audit.map(a=><tr key={a.id}><td>{a.created_at}</td><td>{a.action_type}</td><td>{a.actor_name}</td><td>{typeof a.details==='string'?a.details:JSON.stringify(a.details)}</td></tr>)}{!audit.length&&<tr><td colSpan="4">No activity.</td></tr>}</tbody></table></div></div></div>}

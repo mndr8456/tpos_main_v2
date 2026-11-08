@@ -1,5 +1,6 @@
 // TPOS R1: explicit real endpoint capabilities; new modules with their own CRUD keys are discovered dynamically.
 export const ROLE_MODULES = [
+  {"key":"einvoice_settings","name":"e-Invoice LHDN","crud":{"create":null,"read":"einvoice_settings.view","update":"einvoice_settings.manage","delete":null}},
   {"key":"kds","name":"Kitchen Display System (KDS)","crud":{"create":null,"read":"kds.view","update":"kds.update_status","delete":null}},
   {"key":"order_terminal","name":"Order Terminal","crud":{"create":"order_terminal.create","read":"order_terminal.view","update":null,"delete":null}},
   {
