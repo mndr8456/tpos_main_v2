@@ -5,6 +5,7 @@ const classifications=Array.from({length:45},(_,i)=>String(i+1).padStart(3,'0'))
 const descriptions={"001": "Breastfeeding equipment", "002": "Child care centres and kindergartens fees", "003": "Computer, smartphone or tablet", "004": "Consolidated e-Invoice", "005": "Construction materials", "006": "Disbursement", "007": "Donation", "008": "e-Commerce - e-Invoice to buyer / purchaser", "009": "e-Commerce - Self-billed e-Invoice", "010": "Education fees", "011": "Goods on consignment (Consignor)", "012": "Goods on consignment (Consignee)", "013": "Gym membership", "014": "Insurance - Education and medical benefits", "015": "Insurance - Takaful or life insurance", "016": "Interest and financing expenses", "017": "Internet subscription", "018": "Land and building", "019": "Medical examination for learning disabilities", "020": "Medical examination or vaccination expenses", "021": "Medical expenses for serious diseases", "022": "Others", "023": "Petroleum operations", "024": "Private retirement scheme or deferred annuity scheme", "025": "Motor vehicle", "026": "Subscription of books / journals / magazines / newspapers", "027": "Reimbursement", "028": "Rental of motor vehicle", "029": "EV charging facilities", "030": "Repair and maintenance", "031": "Research and development", "032": "Foreign income", "033": "Self-billed - Betting and gaming", "034": "Self-billed - Importation of goods", "035": "Self-billed - Importation of services", "036": "Self-billed - Others", "037": "Self-billed - Monetary payment to agents, dealers or distributors", "038": "Sports equipment and sports facilities", "039": "Supporting equipment for disabled person", "040": "Voluntary contribution to approved provident fund", "041": "Dental examination or treatment", "042": "Fertility treatment", "043": "Treatment and home care nursing", "044": "Vouchers, gift cards, loyalty points, etc", "045": "Self-billed - Non-monetary payment to agents, dealers or distributors"};
 export default function EinvoiceProductMappingC42B({notify,canManage}){
  const [ownerAllowed,setOwnerAllowed]=useState(false),[items,setItems]=useState([]),[search,setSearch]=useState(''),[busy,setBusy]=useState(''),[drafts,setDrafts]=useState({});
+ const [taxSync,setTaxSync]=useState(null),[taxAck,setTaxAck]=useState(false);
  const [page,setPage]=useState(1),[pageSize,setPageSize]=useState(25),[statusFilter,setStatusFilter]=useState('all'),[total,setTotal]=useState(0),[counts,setCounts]=useState({}),[checked,setChecked]=useState([]),[preview,setPreview]=useState(null),[ack,setAck]=useState(false);
  async function load(term=search,nextPage=page,nextStatus=statusFilter,nextPageSize=pageSize){
   try{const qs=new URLSearchParams({search:term,page:String(nextPage),pageSize:String(nextPageSize),status:nextStatus});
@@ -31,6 +32,20 @@ export default function EinvoiceProductMappingC42B({notify,canManage}){
    notify(`${result.confirmed} product mappings confirmed by Owner.`);setPreview(null);setChecked([]);setAck(false);await load();
   }catch(e){notify(e.message,true);setPreview(null);setAck(false);}finally{setBusy('');}
  }
+ async function previewProductTaxSync(){
+  if(!canManage||!ownerAllowed)return;
+  setBusy('tax-sync-preview');setTaxSync(null);setTaxAck(false);
+  try{const data=await request('/einvoice/product-mappings/tax-sync-preview',{method:'POST',body:{search}});setTaxSync(data);}
+  catch(e){notify(e.message,true);}finally{setBusy('');}
+ }
+ async function confirmProductTaxSync(){
+  if(!taxSync?.candidates?.length||!taxAck||!!busy)return;
+  setBusy('tax-sync-confirm');try{
+   const result=await request('/einvoice/product-mappings/tax-sync-confirm',{method:'POST',body:{candidates:taxSync.candidates,previewDigest:taxSync.previewDigest,previewToken:taxSync.previewToken,acknowledge:true}});
+   notify(`${result.updated} Product Master tax codes synchronized; ${result.reverified} Owner Verified mappings reconfirmed with audit.`);
+   setTaxSync(null);setTaxAck(false);setPreview(null);setChecked([]);await load();
+  }catch(e){notify(e.message,true);setTaxSync(null);setTaxAck(false);}finally{setBusy('');}
+ }
  function update(id,patch){setDrafts(d=>({...d,[id]:{...(d[id]||{}),...patch}}));}
  async function confirm(item){if(!canManage||!ownerAllowed)return;setBusy(item.id);try{
   const selected=drafts[item.id]||{};
@@ -54,6 +69,19 @@ export default function EinvoiceProductMappingC42B({notify,canManage}){
     <label className="einvoice-mapping-option">Per page<select value={pageSize} onChange={e=>{const n=Number(e.target.value);setPageSize(n);setPage(1);setChecked([]);setPreview(null);void load(search,1,statusFilter,n);}}><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></label>
     <span className="einvoice-mapping-count">{items.length} of {total} shown</span>
    </div>
+   {editable&&<div className="einvoice-mapping-preview" style={{marginBottom:16}}>
+    <h3>Product Master MyInvois Tax Synchronization — Owner Review</h3>
+    <p>For active products with mismatched tax codes only. The backend derives the proposed code from JKDM (SALES_TAX → 01, SERVICE_TAX → 02, NONE → 06). A previous Owner Verified Mapping is re-confirmed with a new audit revision, never silently overwritten. No previous sale or MyInvois submission is changed.</p>
+    <button type="button" className="outline" disabled={!!busy} onClick={previewProductTaxSync}>Scan &amp; Preview Tax Mismatches (max 500 per batch)</button>
+    {taxSync&&<div role="region" aria-label="Product Tax Synchronization Preview">
+     <p><strong>{taxSync.eligibleTotal} eligible</strong> · {taxSync.aligned} already aligned · {taxSync.blocked.length} require individual review · {taxSync.remainingEligible} eligible in later batches.</p>
+     <div className="einvoice-mapping-preview-lines">{taxSync.candidates.map(c=><div key={c.productId}>{c.sku} — {c.productName}: {c.from} → {c.to} ({c.verifiedMappingAction})</div>)}
+      {taxSync.blocked.map(c=><div key={c.productId}>{c.sku}: {c.reason}</div>)}</div>
+     <label className="einvoice-mapping-ack"><input type="checkbox" checked={taxAck} onChange={e=>setTaxAck(e.target.checked)}/> I am the OWNER. I have reviewed the proposed Product Master changes and any new mapping revisions.</label>
+     <div className="einvoice-mapping-bulk-actions"><button type="button" className="outline" disabled={!!busy} onClick={()=>{setTaxSync(null);setTaxAck(false);}}>Cancel</button>
+      <button type="button" className="primary" disabled={!!busy||!taxAck||!taxSync.candidates.length} onClick={confirmProductTaxSync}>{busy==='tax-sync-confirm'?'Confirming...':`Confirm Tax Synchronization (${taxSync.candidates.length})`}</button></div>
+    </div>}
+   </div>}
    {editable&&<div className="einvoice-mapping-bulk-actions">
     <label><input type="checkbox" checked={eligibleItems.length>0&&eligibleItems.every(p=>checked.includes(p.id))} onChange={e=>{setPreview(null);setChecked(v=>e.target.checked?[...new Set([...v,...eligibleItems.map(p=>p.id)])]:v.filter(id=>!eligibleItems.some(p=>p.id===id)));}}/> Select eligible on page</label>
     <span>{checked.length} selected</span>

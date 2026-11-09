@@ -1,3 +1,4 @@
+import {previewTaxSync,confirmTaxSync} from './einvoice-tax-sync-r1.js';
 import {listEinvoiceProductMappings,confirmEinvoiceProductMapping,previewBulkEinvoiceProductMappings,confirmBulkEinvoiceProductMappings} from './einvoice-verified-mapping-c42b.js';
 import {issueEinvoiceRequest,publicRequestDetails,submitPublicRequest} from './einvoice-requests-r12.js';
 import {getReceiptSettings,saveReceiptSettings,getReceiptSettingsAudit} from './receipt-settings.js';
@@ -99,6 +100,8 @@ export function createApp(){
  app.get('/api/v2/einvoice/public/request/:token',publicRequestDetails);
  app.post('/api/v2/einvoice/public/request/:token',submitPublicRequest);
  app.post('/api/v2/einvoice/requests/issue/:saleId',authenticate,permitted('pos.view'),issueEinvoiceRequest);
+ app.post('/api/v2/einvoice/product-mappings/tax-sync-preview',authenticate,permitted('einvoice_settings.manage'),previewTaxSync);
+ app.post('/api/v2/einvoice/product-mappings/tax-sync-confirm',authenticate,permitted('einvoice_settings.manage'),confirmTaxSync);
  app.get('/api/v2/einvoice/product-mappings',authenticate,permitted('einvoice_settings.view'),listEinvoiceProductMappings);
  app.post('/api/v2/einvoice/product-mappings/bulk-preview',authenticate,permitted('einvoice_settings.manage'),previewBulkEinvoiceProductMappings);
  app.post('/api/v2/einvoice/product-mappings/bulk-confirm',authenticate,permitted('einvoice_settings.manage'),confirmBulkEinvoiceProductMappings);
