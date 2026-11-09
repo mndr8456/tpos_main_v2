@@ -1,5 +1,9 @@
+import {captureCheckoutVerifiedMappingEvidenceC42B} from './einvoice-verified-mapping-c42b.js';
+import {normalizedCodes,assertReduction,lockReductionMaster,reserveCheckoutVoucher,persistSaleReduction} from './pos-reduction-settlement.js';
+import {captureCheckoutLineTaxEvidenceC42} from './einvoice-line-tax-evidence-c42.js';
+import {captureCheckoutSnapshotR13} from './einvoice-checkout-snapshot-r13.js';
 import {captureReceiptFooter,DEFAULT_RECEIPT_FOOTER} from './receipt-settings.js';
-// Tenant-local cash-only checkout. No external provider payments or voucher redemption.
+// Tenant-local cash checkout with atomic voucher redemption and reduction evidence.
 // All durable changes commit or roll back together on a single InnoDB connection.
 import {randomUUID,createHash} from 'node:crypto';
 import {z} from 'zod';
@@ -22,6 +26,8 @@ export async function receipt(conn,saleId){
  const [[footer]]=await conn.execute('SELECT footer_message FROM pos_sale_receipt_footers WHERE sale_id=?',[saleId]);
  const [[registration]]=await conn.execute('SELECT ssm_registration_number,ssm_old_registration_number,sst_sales_tax_number,sst_service_tax_number FROM company_registrations WHERE id=1');
  const [[paymentAttempt]]=(!sale.payment_method||sale.payment_method==='CASH')?[[]]:await conn.execute('SELECT payment_reference,verification_mode FROM pos_payment_attempts WHERE sale_id=? LIMIT 1',[saleId]);
+ const [[exists]]=await conn.execute("SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pos_sale_reductions'");
+ const [[reduction]]=Number(exists?.n)===1?await conn.execute('SELECT discount_amount,voucher_amount FROM pos_sale_reductions WHERE sale_id=?',[saleId]):[[null]];
  const [sstSwitches]=await conn.execute('SELECT tax_type,is_enabled FROM sst_tax_settings ORDER BY tax_type');
  const enabledTax=new Set(sstSwitches.filter(row=>Boolean(row.is_enabled)).map(row=>String(row.tax_type)));
  return {
@@ -39,7 +45,7 @@ export async function receipt(conn,saleId){
   phone:company?.phone||'',email:company?.email||'',footerMessage:footer?.footer_message??DEFAULT_RECEIPT_FOOTER,
   branchName:sale.branch_name,cashierName:sale.cashier_name,postedAtUtc:sale.posted_time,
   orderScope:sale.order_scope,tableId:sale.table_id?str(sale.table_id):null,
-  lines,subtotal:str(sale.subtotal),salesTax:str(sale.sales_tax),serviceTax:str(sale.service_tax),
+  lines,subtotal:str(sale.subtotal),discountAmount:String(reduction?.discount_amount??'0.00'),voucherAmount:String(reduction?.voucher_amount??'0.00'),salesTax:str(sale.sales_tax),serviceTax:str(sale.service_tax),
   salesTaxRate:sale.sales_tax_rate_pct==null?null:str(sale.sales_tax_rate_pct),
   serviceTaxRate:sale.service_tax_rate_pct==null?null:str(sale.service_tax_rate_pct),
   serviceChargeRate:sale.service_charge_rate_pct==null?null:str(sale.service_charge_rate_pct),
@@ -49,15 +55,19 @@ export async function receipt(conn,saleId){
 }
 export async function cashCheckout(req,res){
  const draftId=id.parse(req.params.id),data=schema.parse(req.body);
+ const codes=normalizedCodes(data);
  if(!req.auth.user.permissions.includes('pos.checkout.cash')||!req.auth.user.permissions.includes('pos.cart.manage'))throw err('POS_CASH_CHECKOUT_FORBIDDEN',403);
- // Refund/discount/voucher settlement adapters must be atomic before enabling them.
- if(data.discountCode||data.voucherCode)throw err('POS_CASH_CHECKOUT_DISCOUNT_VOUCHER_NOT_CONNECTED');
+ // Reductions require migration 050, which is never installed implicitly at checkout.
  const conn=await req.auth.pool.getConnection();
  try{
   await conn.beginTransaction();
   const [[prior]]=await conn.execute('SELECT id,draft_id,cash_received,total FROM pos_sales WHERE request_key=?',[data.requestKey]);
   if(prior){
    if(str(prior.draft_id)!==str(draftId)||str(prior.cash_received)!==fmtSen(parseSen(data.cashReceived))||str(prior.total)!==fmtSen(parseSen(data.expectedTotal)))throw err('POS_CHECKOUT_REQUEST_KEY_CONFLICT');
+   if(codes.discountCode||codes.voucherCode){
+    const [[priorCode]]=await conn.execute('SELECT d.discount_code AS discount_code,v.voucher_code AS voucher_code FROM pos_sale_reductions r LEFT JOIN discounts d ON d.id=r.discount_id LEFT JOIN vouchers v ON v.id=r.voucher_id WHERE r.sale_id=?',[prior.id]);
+    if(String(priorCode?.discount_code||'')!==codes.discountCode||String(priorCode?.voucher_code||'')!==codes.voucherCode)throw err('POS_CHECKOUT_REQUEST_KEY_CONFLICT');
+   }
    const answer=await receipt(conn,prior.id);await conn.commit();return res.set('Cache-Control','no-store').json({message:'POS_CASH_SALE_ALREADY_POSTED',idempotent:true,receipt:answer});
   }
   // Shift first: shift closing also locks the same row and must account for the sale.
@@ -69,15 +79,23 @@ export async function cashCheckout(req,res){
   if(!shift||shift.status!=='OPEN'||str(shift.branch_id)!==str(ref.branch_id)||str(shift.cashier_user_id)!==str(req.auth.user.id))throw err('POS_OPEN_SHIFT_REQUIRED');
   const [[draft]]=await conn.execute('SELECT id,branch_id,shift_id,cashier_user_id,order_scope,table_id,status,version FROM pos_drafts WHERE id=? FOR UPDATE',[draftId]);
   if(!draft||draft.status!=='DRAFT')throw err('POS_ORDER_MUST_BE_ACTIVE');
+  const [[pending]]=await conn.execute("SELECT id FROM pos_payment_attempts WHERE draft_id=? AND status='PENDING' LIMIT 1 FOR UPDATE",[draftId]);
+  if(pending)throw err('POS_PAYMENT_PENDING_CANCEL_FIRST');
   if(draft.version!==data.expectedVersion)throw err('POS_DRAFT_VERSION_CHANGED');
   if(draft.order_scope==='DINE_IN'&&!draft.table_id)throw err('POS_DINE_IN_TABLE_REQUIRED');
   const [[cash]]=await conn.execute("SELECT is_active FROM payment_method_settings WHERE branch_id=? AND method_code='CASH' FOR UPDATE",[draft.branch_id]);
   // CASH has a default enabled state when settings are not overridden.
   if(cash&&Number(cash.is_active)!==1)throw err('POS_CASH_METHOD_DISABLED');
-  const [rawLines]=await conn.execute('SELECT id,product_id,product_name,sku,quantity,unit_price,track_stock,product_type,category_id,unit_code FROM pos_draft_lines WHERE draft_id=? ORDER BY product_id FOR UPDATE',[draftId]);
+  const [rawLines]=await conn.execute('SELECT id,product_id,product_name,sku,quantity,unit_price,track_stock,product_type,category_id,unit_code FROM pos_draft_lines WHERE draft_id=? ORDER BY id FOR UPDATE',[draftId]);
   if(!rawLines.length)throw err('POS_EMPTY_ORDER');
   const subtotal=totalDraftLines(rawLines);
-  const quote=await calculateDraftQuote(conn,req,draftId,{});
+  if(codes.discountCode||codes.voucherCode){
+   const [[installed]]=await conn.execute("SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pos_sale_reductions'");
+   if(Number(installed?.n)!==1)throw err('POS_REDUCTION_MIGRATION_050_REQUIRED');
+  }
+  const master=await lockReductionMaster(conn,codes);
+  const quote=await calculateDraftQuote(conn,req,draftId,codes);
+  assertReduction(quote,codes);
   const total=quote.bill.total;
   if(total!==fmtSen(parseSen(data.expectedTotal)))throw err('POS_CHECKOUT_TOTAL_CHANGED');
   const paid=parseSen(data.cashReceived),due=parseSen(total);
@@ -102,6 +120,8 @@ export async function cashCheckout(req,res){
    cogs+=parseSen(result.issuedCost);
   }
   if(cogs>999999999999n)throw err('POS_COST_LIMIT');
+  const [[clock]]=codes.voucherCode?await conn.execute("SELECT DATE_FORMAT(UTC_TIMESTAMP(6),'%Y-%m-%d %H:%i:%s') AS now"):[[null]];
+  const reservationId=await reserveCheckoutVoucher(conn,{master,requestKey:data.requestKey,draft,saleLines:subtotal.lines,quote,userId:req.auth.user.id,now:clock?.now});
   const journal=makePosCashJournal(quote.bill,fmtSen(cogs));
   // The tax/fee percentages on a receipt must be those effective at posting.
   // Never re-read mutable Owner Settings to invent historical rates.
@@ -120,6 +140,16 @@ export async function cashCheckout(req,res){
     await conn.execute("INSERT INTO inventory_movements(request_key,request_hash,branch_id,product_id,movement_type,quantity_delta,value_delta,quantity_after,carrying_value_after,average_cost_after,reference,actor_user_id) VALUES(?,?,?,?,'POS_SALE',?,?,?,?,?,?,?)",[requestKey,hash,draft.branch_id,line.product_id,`-${Number(line.quantity).toFixed(2)}`,`-${movement.issuedCost}`,movement.quantity,movement.carryingValue,movement.averageCost,receiptNumber,req.auth.user.id]);
    }
   }
+  await persistSaleReduction(conn,{saleId,branchId:draft.branch_id,master,reservationId,quote,userId:req.auth.user.id});
+  const adjustment={discount_amount:quote.bill.discount,voucher_amount:quote.bill.voucher};
+  if(codes.discountCode||codes.voucherCode){
+   await captureCheckoutSnapshotR13(conn,{saleId,rawLines,adjustment});
+   await captureCheckoutLineTaxEvidenceC42(conn,{saleId,quote,adjustment});
+  }else{
+   await captureCheckoutSnapshotR13(conn,{saleId,rawLines});
+   await captureCheckoutLineTaxEvidenceC42(conn,{saleId,quote});
+  }
+  await captureCheckoutVerifiedMappingEvidenceC42B(conn,{saleId});
   const [j]=await conn.execute("INSERT INTO accounting_journals(source_type,source_id,branch_id) VALUES('POS_CASH_SALE',?,?)",[saleId,draft.branch_id]);
   for(const line of journal){await conn.execute('INSERT INTO accounting_journal_lines(journal_id,account_code,debit,credit,description) VALUES(?,?,?,?,?)',[j.insertId,line.accountCode,line.debit,line.credit,line.description]);}
   await conn.execute("UPDATE pos_drafts SET status='COMPLETED',version=version+1,updated_at=UTC_TIMESTAMP(6) WHERE id=? AND status='DRAFT'",[draftId]);

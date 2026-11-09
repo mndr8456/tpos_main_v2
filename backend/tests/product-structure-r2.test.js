@@ -12,7 +12,7 @@ const line=(values={})=>{
 };
 const csv=(...rows)=>PRODUCT_CSV_HEADERS.join(',')+'\r\n'+rows.join('\r\n')+'\r\n';
 test('R2 CSV template includes Product Structure, Base Unit, packaging and component SKUs',()=>{
- assert.equal(PRODUCT_CSV_HEADERS.length,29);
+ assert.equal(PRODUCT_CSV_HEADERS.length,30);
  for(const x of ['product_structure','base_unit','packaging_units','component_skus'])assert.ok(PRODUCT_CSV_HEADERS.includes(x));
  assert.equal(parseProductCsv(template)[0].data.productStructure,'SINGLE');
 });

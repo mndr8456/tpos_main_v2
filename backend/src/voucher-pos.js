@@ -7,7 +7,7 @@ const key=x=>{if(typeof x!=='string'||!/^[A-Za-z0-9:_-]{8,128}$/.test(x))throw p
 const ref=x=>{if(typeof x!=='string'||!/^[A-Za-z0-9:_-]{1,128}$/.test(x))throw problem('INVALID_CHECKOUT_REF',400);return x;};
 const positive=x=>{if(!Number.isSafeInteger(Number(x))||Number(x)<=0)throw problem('INVALID_ID',400);return Number(x);};
 const checkoutTypes=['RETAIL','SINGLE_ORDER','COMBINED_ORDER','SPLIT_ORDER'];
-async function lockParent(conn,voucherId){const [[row]]=await conn.execute('SELECT * FROM vouchers WHERE id=? FOR UPDATE',[positive(voucherId)]);if(!row)throw problem('VOUCHER_NOT_FOUND',404);return row;}
+async function lockParent(conn,voucherId){const [[row]]=await conn.execute("SELECT v.*,DATE_FORMAT(v.starts_at,'%Y-%m-%d %H:%i:%s') AS starts_at,DATE_FORMAT(v.ends_at,'%Y-%m-%d %H:%i:%s') AS ends_at FROM vouchers v WHERE v.id=? FOR UPDATE",[positive(voucherId)]);if(!row)throw problem('VOUCHER_NOT_FOUND',404);return row;}
 async function reservationWithParentLock(conn,reservationId){const [lookup]=await conn.execute('SELECT voucher_id FROM voucher_reservations WHERE id=?',[positive(reservationId)]);if(!lookup.length)throw problem('RESERVATION_NOT_FOUND',404);const voucher=await lockParent(conn,lookup[0].voucher_id);const [[reservation]]=await conn.execute('SELECT * FROM voucher_reservations WHERE id=? FOR UPDATE',[reservationId]);return {voucher,reservation};}
 async function log(conn,voucherId,reservationId,actor,type,details){await conn.execute('INSERT INTO voucher_audit_logs(voucher_id,reservation_id,actor_user_id,action_type,next_data) VALUES(?,?,?,?,?)',[voucherId,reservationId,positive(actor),type,JSON.stringify(details)]);}
 /** Caller must provide authoritative server-side lines and orderScope from persisted checkout. */

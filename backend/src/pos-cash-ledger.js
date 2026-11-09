@@ -9,8 +9,10 @@ export function makePosCashJournal(bill,cost){
  const cent=value=>parseSen(str(value));
  const total=cent(bill.total),base=cent(bill.subtotalBeforeTax),salesTax=cent(bill.salesTax),serviceTax=cent(bill.serviceTax),charge=cent(bill.serviceCharge),cogs=cent(cost);
  const rounding=BigInt(bill.roundingAdjustmentSen);
+ const reduced=cent(bill.discount??'0.00')+cent(bill.voucher??'0.00');
+ if(reduced<0n||reduced>base)throw err('POS_ACCOUNTING_INVALID_REDUCTION');
  put(accounts.CASH,'DR',total,'Cash received from POS sale');
- put(accounts.REVENUE,'CR',base,'POS sales net of SST');
+ put(accounts.REVENUE,'CR',base-reduced,reduced>0n?'POS sales net of SST and reductions':'POS sales net of SST');
  put(accounts.SST_SALES,'CR',salesTax,'Sales Tax collected');
  put(accounts.SST_SERVICE,'CR',serviceTax,'Service Tax collected');
  put(accounts.CHARGE,'CR',charge,'Merchant service charge');

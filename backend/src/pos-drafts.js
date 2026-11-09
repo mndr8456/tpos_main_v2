@@ -44,7 +44,7 @@ async function detail(conn,req,draftId){
  const d=await draft(conn,req,draftId);
  const [rows]=await conn.execute('SELECT id,product_id,product_name,sku,barcode,category_id,unit_code,quantity,unit_price,track_stock,product_type FROM pos_draft_lines WHERE draft_id=? ORDER BY id',[draftId]);
  const calculated=totalDraftLines(rows);
- return {draft:{...d,id:String(d.id),branch_id:String(d.branch_id),shift_id:String(d.shift_id),cashier_user_id:String(d.cashier_user_id),table_id:d.table_id==null?null:String(d.table_id)},...calculated,checkoutAvailable:false,cashCheckoutAvailable:true,checkoutBlockers:['EXTERNAL_PAYMENT_PROVIDER_NOT_CONNECTED','DISCOUNT_VOUCHER_POSTING_NOT_CONNECTED']};
+ return {draft:{...d,id:String(d.id),branch_id:String(d.branch_id),shift_id:String(d.shift_id),cashier_user_id:String(d.cashier_user_id),table_id:d.table_id==null?null:String(d.table_id)},...calculated,checkoutAvailable:false,cashCheckoutAvailable:true,checkoutBlockers:['EXTERNAL_PROVIDER_PAYMENT_REQUIRES_CERTIFIED_INTEGRATION']};
 }
 async function log(conn,draftId,userId,action,details){await conn.execute('INSERT INTO pos_draft_audit_logs(draft_id,actor_user_id,action_type,details) VALUES(?,?,?,?)',[draftId,userId,action,JSON.stringify(details)]);}
 async function command(conn,d,action,request,params){
@@ -208,7 +208,7 @@ export async function changePosDraftStatus(req,res){
  });res.json(result);
 }
 const dateMalaysia=()=>{const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Kuala_Lumpur',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());const map=Object.fromEntries(parts.map(x=>[x.type,x.value]));return `${map.year}-${map.month}-${map.day}`;};
-export async function calculateDraftQuote(conn,req,draftId,values={}){
+export async function calculateDraftQuote(conn,req,draftId,values={},context={}){
  const query=quoteSchema.parse(values);
  if(query.discountCode&&query.voucherCode)throw bad('POS_STACKING_POLICY_NOT_APPROVED',409);
  const data=await detail(conn,req,draftId);
@@ -226,7 +226,7 @@ export async function calculateDraftQuote(conn,req,draftId,values={}){
   const [[v]]=await conn.execute(`SELECT v.*,DATE_FORMAT(v.starts_at,'%Y-%m-%d %H:%i:%s') AS starts_at,DATE_FORMAT(v.ends_at,'%Y-%m-%d %H:%i:%s') AS ends_at FROM vouchers v WHERE v.voucher_code=? AND v.is_deleted=0 LIMIT 1`,[query.voucherCode]);
   if(!v)throw bad('POS_VOUCHER_NOT_FOUND',404);
   const [targets]=await conn.execute('SELECT product_id,category_id FROM voucher_targets WHERE voucher_id=?',[v.id]);
-  const [uses]=await conn.execute("SELECT status,COUNT(*) AS n FROM voucher_reservations WHERE voucher_id=? AND status IN ('RESERVED','REDEEMED') GROUP BY status",[v.id]);
+  const [uses]=context.excludeReservationId?await conn.execute("SELECT status,COUNT(*) AS n FROM voucher_reservations WHERE voucher_id=? AND status IN ('RESERVED','REDEEMED') AND id<>? GROUP BY status",[v.id,context.excludeReservationId]):await conn.execute("SELECT status,COUNT(*) AS n FROM voucher_reservations WHERE voucher_id=? AND status IN ('RESERVED','REDEEMED') GROUP BY status",[v.id]);
   const used=uses.reduce((sum,r)=>sum+Number(r.n),0);
   const [[clock]]=await conn.execute("SELECT DATE_FORMAT(UTC_TIMESTAMP(6),'%Y-%m-%d %H:%i:%s') AS now");
   voucher=evaluateVoucher(v,{lines:data.lines.map(l=>({productId:l.product_id,categoryId:l.category_id,subtotal:l.lineTotal,active:true})),orderScope:data.draft.order_scope,now:clock.now,usedCount:used,customerRef:null,targetIds:targets.map(x=>String(x.product_id??x.category_id))});
@@ -250,11 +250,22 @@ export async function calculateDraftQuote(conn,req,draftId,values={}){
   const item=taxes.get(String(line.product_id));
   return {lineSen:line.lineSen,...applySstPolicy(item,sstSettings)};
  }),{discountSen,voucherSen,serviceChargeRate:chargePolicy.rate});
- return {draftId:String(draftId),draftVersion:data.draft.version,subtotal:data.subtotal,discount,voucher,bill,sst,serviceCharge:chargePolicy,provisionalAfterReduction:format(data.subtotalSen-discountSen-voucherSen),cashCheckoutAvailable:!query.discountCode&&!query.voucherCode,notPayable:!!query.discountCode||!!query.voucherCode};
+ return {draftId:String(draftId),draftVersion:data.draft.version,subtotal:data.subtotal,discount,voucher,bill,sst,serviceCharge:chargePolicy,provisionalAfterReduction:format(data.subtotalSen-discountSen-voucherSen),cashCheckoutAvailable:(!query.discountCode||discount.eligible)&&(!query.voucherCode||voucher.eligible),notPayable:(!!query.discountCode&&!discount.eligible)||(!!query.voucherCode&&!voucher.eligible)};
 }
 export async function quotePosDraft(req,res){
  const draftId=id.parse(req.params.id);
- const output=await calculateDraftQuote(req.auth.pool,req,draftId,req.body||{});
+ const codes=quoteSchema.parse(req.body||{});
+ // A resumed, owned PENDING QR attempt may already hold this voucher.
+ // Exclude only THAT reservation from the preview usage count; never another cashier's.
+ let context={};
+ if(codes.voucherCode){
+  const [[installed]]=await req.auth.pool.execute("SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pos_payment_attempt_reductions'");
+  if(Number(installed?.n)===1){
+   const [[held]]=await req.auth.pool.execute("SELECT r.voucher_reservation_id,v.voucher_code FROM pos_payment_attempts a JOIN pos_payment_attempt_reductions r ON r.attempt_id=a.id JOIN vouchers v ON v.id=r.voucher_id WHERE a.draft_id=? AND a.cashier_user_id=? AND a.status='PENDING' AND r.status='RESERVED' ORDER BY a.id DESC LIMIT 1",[draftId,req.auth.user.id]);
+   if(held&&String(held.voucher_code).toUpperCase()===codes.voucherCode.toUpperCase())context={excludeReservationId:held.voucher_reservation_id};
+  }
+ }
+ const output=await calculateDraftQuote(req.auth.pool,req,draftId,codes,context);
  return res.set('Cache-Control','no-store').json(output);
 }
 

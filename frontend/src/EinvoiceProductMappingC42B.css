@@ -1,0 +1,47 @@
+/* C4.2B only: keep every owner mapping control inside its product box. */
+.einvoice-mapping-card{width:100%;max-width:1000px;min-width:0;box-sizing:border-box}
+.einvoice-mapping-section{min-width:0;margin-bottom:0;padding-bottom:0;border-bottom:0}
+.einvoice-mapping-toolbar{display:flex;align-items:end;justify-content:space-between;gap:14px;min-width:0;margin:16px 0}
+.einvoice-mapping-search{display:flex;flex:1 1 320px;max-width:480px;min-width:0;flex-direction:column;gap:7px;font-size:13px;font-weight:600}
+.einvoice-mapping-search input{display:block;width:100%;min-width:0;box-sizing:border-box;padding:11px 12px;border:1px solid #c6d7eb;border-radius:9px;background:#fff;color:#15263f;font:inherit}
+.einvoice-mapping-count{white-space:nowrap;color:#617998;font-size:12px;padding-bottom:12px}
+.einvoice-mapping-list{display:grid;gap:14px;min-width:0}
+.einvoice-mapping-product{border:1px solid #d6e3f2;border-radius:12px;padding:16px;background:#fff;min-width:0;box-sizing:border-box}
+.einvoice-mapping-product-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;min-width:0;margin-bottom:14px}
+.einvoice-mapping-identity{display:flex;flex-direction:column;gap:3px;min-width:0;overflow-wrap:anywhere}
+.einvoice-mapping-identity strong{font-size:14px;color:#142a48}
+.einvoice-mapping-identity span{font-size:12px;color:#647b98}
+.einvoice-mapping-meta{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;min-width:0}
+.einvoice-mapping-jkdm,.einvoice-mapping-status{border-radius:999px;padding:5px 9px;font-size:11px;font-weight:600;line-height:1.3;white-space:normal;text-align:center}
+.einvoice-mapping-jkdm{background:#f1f5fa;color:#435b78}
+.einvoice-mapping-status.is-confirmed{background:#e9f7ef;color:#19613a}
+.einvoice-mapping-status.is-pending{background:#fff5e5;color:#82531b}
+.einvoice-mapping-fields{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,.8fr) minmax(0,1fr);gap:12px;min-width:0}
+.einvoice-mapping-field{display:flex;flex-direction:column;gap:7px;min-width:0;font-size:12px;font-weight:600;color:#314b69}
+.einvoice-mapping-field select{display:block;box-sizing:border-box;width:100%;min-width:0;max-width:100%;height:42px;padding:9px 32px 9px 10px;border:1px solid #c6d7eb;border-radius:9px;background-color:#fff;color:#15263f;font:inherit;font-weight:500;text-overflow:ellipsis}
+.einvoice-mapping-field select:focus,.einvoice-mapping-search input:focus{outline:2px solid #94b8e4;outline-offset:1px;border-color:#699ad0}
+.einvoice-mapping-field select:disabled{background-color:#f1f5fa;color:#566b87}
+.einvoice-mapping-product-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}
+.einvoice-mapping-product-foot .einvoice-mapping-confirm{width:auto;min-width:140px;max-width:100%;white-space:normal}
+.einvoice-mapping-empty{padding:18px;margin:0;border:1px dashed #c6d7eb;border-radius:10px;color:#617998}
+.einvoice-mapping-note{margin-top:16px}
+@media(max-width:760px){.einvoice-mapping-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.einvoice-mapping-field:first-child{grid-column:1/-1}}
+@media(max-width:520px){.einvoice-mapping-toolbar,.einvoice-mapping-product-head{flex-direction:column;align-items:stretch}.einvoice-mapping-search{flex:auto;max-width:none}.einvoice-mapping-count{padding-bottom:0}.einvoice-mapping-meta{justify-content:flex-start}.einvoice-mapping-fields{grid-template-columns:minmax(0,1fr)}.einvoice-mapping-field:first-child{grid-column:auto}.einvoice-mapping-product{padding:12px}.einvoice-mapping-product-foot .einvoice-mapping-confirm{width:100%}}
+
+.einvoice-mapping-suggestion,.einvoice-mapping-warning{margin:0 0 12px;padding:9px 11px;border-radius:8px;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.einvoice-mapping-suggestion{color:#405d7d;background:#eef4fb;border:1px solid #d5e3f4}
+.einvoice-mapping-warning{color:#7e4c12;background:#fff7e9;border:1px solid #efd9ad}
+
+/* R2 bulk review — responsive controls and bounded preview. */
+.einvoice-mapping-summary,.einvoice-mapping-bulk-actions,.einvoice-mapping-pagination{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0}
+.einvoice-mapping-summary span{padding:7px 10px;background:#eef4fb;border-radius:8px;color:#254366;font-size:12px}
+.einvoice-mapping-option{display:flex;flex-direction:column;gap:6px;font-size:12px;color:#425b79}
+.einvoice-mapping-option select{height:40px;border:1px solid #c6d7eb;border-radius:8px;padding:5px;max-width:220px;background:white;color:#142a48}
+.einvoice-mapping-bulk-actions{border:1px solid #d6e3f2;border-radius:10px;padding:10px}
+.einvoice-mapping-bulk-actions button,.einvoice-mapping-pagination button{white-space:normal}
+.einvoice-mapping-select{display:flex;align-items:center;gap:8px;font-size:12px;color:#425b79;margin-bottom:9px}
+.einvoice-mapping-preview{padding:14px;border:2px solid #94b8e4;border-radius:12px;margin:14px 0;background:#f8fbff;color:#142a48}
+.einvoice-mapping-preview-lines{max-height:230px;overflow-y:auto;padding:10px;border:1px solid #c6d7eb;background:#fff;font-size:12px;line-height:1.8}
+.einvoice-mapping-ack{display:flex;gap:9px;align-items:flex-start;font-size:13px;margin:15px 0}
+.einvoice-mapping-pagination{justify-content:flex-end}
+@media(max-width:760px){.einvoice-mapping-toolbar{flex-wrap:wrap}.einvoice-mapping-option{flex:1 1 130px}}

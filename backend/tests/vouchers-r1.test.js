@@ -32,20 +32,20 @@ test('Voucher R1 global and per-customer limits count RESERVED with REDEEMED',()
  assert.equal(evaluateVoucher(voucher,{...context,customerRef:null}).reason,'CUSTOMER_REQUIRED');
 });
 test('Voucher R1 reserve is idempotent for same checkout and rejects reused key',async()=>{
- const queries=[];const conn={execute:async(sql,params)=>{queries.push(sql);if(sql.includes('FROM vouchers WHERE id=? FOR UPDATE'))return [[voucher]];if(sql.includes('FROM voucher_reservations WHERE reservation_key='))return [[{id:7,voucher_id:1,checkout_ref:'CHK-1',checkout_type:'RETAIL',customer_ref:'CUSTOMER123',status:'RESERVED',discount_amount:'5.00'}]];throw Error('Unexpected SQL '+sql);}};
+ const queries=[];const conn={execute:async(sql,params)=>{queries.push(sql);if(sql.includes('FROM vouchers v WHERE v.id=? FOR UPDATE'))return [[voucher]];if(sql.includes('FROM voucher_reservations WHERE reservation_key='))return [[{id:7,voucher_id:1,checkout_ref:'CHK-1',checkout_type:'RETAIL',customer_ref:'CUSTOMER123',status:'RESERVED',discount_amount:'5.00'}]];throw Error('Unexpected SQL '+sql);}};
  const common={voucherId:1,reservationKey:'RESERVATION-1',checkoutRef:'CHK-1',checkoutType:'RETAIL',customerRef:'CUSTOMER123',operatorUserId:1,lines:context.lines,orderScope:'DINE_IN',now:context.now};
  const r=await reserveVoucher(conn,common);assert.equal(r.reused,true);assert.equal(r.reservationId,'7');assert.match(queries[0],/FOR UPDATE/);
  await assert.rejects(reserveVoucher(conn,{...common,checkoutRef:'CHK-OTHER'}),/RESERVATION_KEY_REUSED/);
 });
 test('Voucher R1 redemption requires verified persisted sale in same transaction',async()=>{
- let changed=0;const conn={execute:async(sql)=>{if(sql.includes('SELECT voucher_id FROM voucher_reservations'))return [[{voucher_id:1}]];if(sql.includes('FROM vouchers WHERE id=? FOR UPDATE'))return [[voucher]];if(sql.includes('SELECT * FROM voucher_reservations WHERE id=? FOR UPDATE'))return [[{status:'RESERVED',sale_ref:null,checkout_ref:'CHK-1',discount_amount:'5.00'}]];if(sql.startsWith('UPDATE voucher_reservations')){changed++;return [{affectedRows:1}];}if(sql.startsWith('INSERT INTO voucher_audit_logs'))return [{affectedRows:1}];throw Error(sql);}};
+ let changed=0;const conn={execute:async(sql)=>{if(sql.includes('SELECT voucher_id FROM voucher_reservations'))return [[{voucher_id:1}]];if(sql.includes('FROM vouchers v WHERE v.id=? FOR UPDATE'))return [[voucher]];if(sql.includes('SELECT * FROM voucher_reservations WHERE id=? FOR UPDATE'))return [[{status:'RESERVED',sale_ref:null,checkout_ref:'CHK-1',discount_amount:'5.00'}]];if(sql.startsWith('UPDATE voucher_reservations')){changed++;return [{affectedRows:1}];}if(sql.startsWith('INSERT INTO voucher_audit_logs'))return [{affectedRows:1}];throw Error(sql);}};
  await assert.rejects(redeemVoucher(conn,{reservationId:7,saleRef:'SALE-1',operatorUserId:1}),/POS_SALE_VERIFICATION_REQUIRED/);
  await assert.rejects(redeemVoucher(conn,{reservationId:7,saleRef:'SALE-1',operatorUserId:1,verifyPersistedSale:async()=>false}),/POS_SALE_NOT_VERIFIED/);
  assert.equal(changed,0);
  const r=await redeemVoucher(conn,{reservationId:7,saleRef:'SALE-1',operatorUserId:1,verifyPersistedSale:async()=>true});assert.equal(r.status,'REDEEMED');assert.equal(changed,1);
 });
 test('Voucher R1 release needs verified unpaid checkout, never redeemed',async()=>{
- let changed=0;const conn={execute:async(sql)=>{if(sql.includes('SELECT voucher_id FROM voucher_reservations'))return [[{voucher_id:1}]];if(sql.includes('FROM vouchers WHERE id=? FOR UPDATE'))return [[voucher]];if(sql.includes('SELECT * FROM voucher_reservations WHERE id=? FOR UPDATE'))return [[{status:'RESERVED',sale_ref:null,checkout_ref:'CHK-1'}]];if(sql.startsWith('UPDATE voucher_reservations')){changed++;return [{affectedRows:1}];}if(sql.startsWith('INSERT INTO voucher_audit_logs'))return [{affectedRows:1}];throw Error(sql);}};
+ let changed=0;const conn={execute:async(sql)=>{if(sql.includes('SELECT voucher_id FROM voucher_reservations'))return [[{voucher_id:1}]];if(sql.includes('FROM vouchers v WHERE v.id=? FOR UPDATE'))return [[voucher]];if(sql.includes('SELECT * FROM voucher_reservations WHERE id=? FOR UPDATE'))return [[{status:'RESERVED',sale_ref:null,checkout_ref:'CHK-1'}]];if(sql.startsWith('UPDATE voucher_reservations')){changed++;return [{affectedRows:1}];}if(sql.startsWith('INSERT INTO voucher_audit_logs'))return [{affectedRows:1}];throw Error(sql);}};
  await assert.rejects(releaseVoucher(conn,{reservationId:7,operatorUserId:1,reason:'Cancelled'}),/POS_UNPAID_VERIFICATION_REQUIRED/);
  await assert.rejects(releaseVoucher(conn,{reservationId:7,operatorUserId:1,reason:'Cancelled',verifyUnpaidCheckout:async()=>false}),/POS_CHECKOUT_NOT_UNPAID/);
  assert.equal(changed,0);

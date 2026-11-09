@@ -5,14 +5,14 @@ import {PRODUCT_CSV_HEADERS,productCsvTemplate,parseProductCsv} from '../src/pro
 const read=p=>readFile(new URL(`../../${p}`,import.meta.url),'utf8');
 const sample=()=>productCsvTemplate().replace(/^\uFEFF/,'');
 test('KPDN CSV template adds a YES/NO field; existing records default to NO',()=>{
- assert.equal(PRODUCT_CSV_HEADERS.length,29);
- assert.equal(PRODUCT_CSV_HEADERS.at(-1),'is_kpdn_controlled');
+ assert.equal(PRODUCT_CSV_HEADERS.length,30);
+ assert.equal(PRODUCT_CSV_HEADERS.at(-2),'is_kpdn_controlled');
  const [row]=parseProductCsv(sample());
  assert.equal(row.data.isKpdnControlled,false);
  const lines=sample().trim().split('\r\n');
- const cells=lines[1].split(',');cells[cells.length-1]='YES';
+ const cells=lines[1].split(',');cells[PRODUCT_CSV_HEADERS.indexOf('is_kpdn_controlled')]='YES';
  assert.equal(parseProductCsv(`${lines[0]}\r\n${cells.join(',')}\r\n`)[0].data.isKpdnControlled,true);
- cells[cells.length-1]='NOT_A_BOOLEAN';
+ cells[PRODUCT_CSV_HEADERS.indexOf('is_kpdn_controlled')]='NOT_A_BOOLEAN';
  assert.equal(parseProductCsv(`${lines[0]}\r\n${cells.join(',')}\r\n`)[0].data.isKpdnControlled,'INVALID');
 });
 test('All historical Product CSV header lengths remain accepted (21/25/28)',()=>{

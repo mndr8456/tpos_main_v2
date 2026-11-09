@@ -4,9 +4,12 @@ import { mkdir,readFile,unlink,writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseProductCsv, productCsvTemplate } from './products-csv.js';
+import { MYINVOIS_COUNTRIES } from './einvoice-country-codes-r12.js';
 export { productCsvTemplate };
 import { structureShape, validateStructure, syncProductStructure, getStructure } from './product-structure.js';
 const failure=(code,status=400)=>Object.assign(new Error(code),{status});
+const originCountryCodes=new Set(MYINVOIS_COUNTRIES.map(([code])=>code));
+const productLhdnClassifications=new Set(Array.from({length:45},(_,i)=>String(i+1).padStart(3,'0')));
 const id=z.coerce.number().int().positive();
 const optional=n=>z.string().trim().max(n).optional().default('');
 // Never silently round monetary amounts, stock thresholds, or tax rates in MySQL.
@@ -23,12 +26,12 @@ export const productSchema=z.object({
  productType:z.enum(['GOODS','SERVICE']).default('GOODS'),...structureShape,categoryId:id,supplierId:optId,
  costPrice:amount,sellingPrice:amount,minStockQty:qty,trackStock:z.boolean(),isWeighable:z.boolean(),
  weighingUnit:z.enum(['KG','G']).default('KG'),requiresPreparation:z.boolean(),stationId:optId,
- lhdnClassificationCode:z.string().trim().min(1).max(16).default('022'),
+ lhdnClassificationCode:z.string().trim().refine(v=>productLhdnClassifications.has(v),{message:'Use a valid MyInvois classification code'}).default('022'),
  lhdnUnitCode:z.string().trim().min(1).max(16).default('EA'),
- lhdnTaxTypeCode:z.string().trim().min(1).max(16).default('06'),
+ lhdnTaxTypeCode:z.enum(['01','02','03','04','05','06','E']).default('06'),
  lhdnTaxRate:decimal(3,100),
  lhdnTaxExemptionReason:optional(500),lhdnProductTariffCode:optional(40),
- lhdnCountryOfOriginCode:optional(3),isTaxInclusive:z.boolean(),
+ lhdnCountryOfOriginCode:optional(3).transform(v=>v.toUpperCase()).refine(v=>!v||originCountryCodes.has(v),{message:'Use a valid MyInvois ISO alpha-3 country code'}),isTaxInclusive:z.boolean(),
  jkdmTaxType:z.enum(['NONE','SALES_TAX','SERVICE_TAX']).default('NONE'),jkdmTaxRate:decimal(3,100),jkdmTaxInclusive:z.boolean().default(false),isKpdnControlled:z.boolean().default(false),
  status:z.enum(['ACTIVE','INACTIVE']).default('ACTIVE')
 }).strict().superRefine((p,ctx)=>{
@@ -172,7 +175,7 @@ async function csvRows(conn,csv){
    isWeighable:d.isWeighable,weighingUnit:d.weighingUnit,requiresPreparation:d.requiresPreparation,
    stationId:d.stationCode?sts.get(d.stationCode.toLocaleLowerCase('en'))||null:'',
    lhdnClassificationCode:d.lhdnClassificationCode,lhdnUnitCode:d.lhdnUnitCode,lhdnTaxTypeCode:d.lhdnTaxTypeCode,
-   lhdnTaxRate:d.lhdnTaxRate,isTaxInclusive:d.isTaxInclusive,jkdmTaxType:d.jkdmTaxType,jkdmTaxRate:d.jkdmTaxRate,jkdmTaxInclusive:d.jkdmTaxInclusive,isKpdnControlled:d.isKpdnControlled,status:d.status};
+   lhdnTaxRate:d.lhdnTaxRate,lhdnCountryOfOriginCode:d.lhdnCountryOfOriginCode,isTaxInclusive:d.isTaxInclusive,jkdmTaxType:d.jkdmTaxType,jkdmTaxRate:d.jkdmTaxRate,jkdmTaxInclusive:d.jkdmTaxInclusive,isKpdnControlled:d.isKpdnControlled,status:d.status};
   if(resolved.components.some(x=>!x.productId))return {line:row.line,error:'COMPONENT_SKU_NOT_FOUND',...d};
   if(d.packagingUnits.some(x=>x.barcode&&barcodes.has(x.barcode.toLowerCase())))return {line:row.line,error:'SKU_OR_BARCODE_DUPLICATE',...d};
   if(!resolved.categoryId)return {line:row.line,error:'CATEGORY_NOT_ACTIVE',...d};
@@ -180,9 +183,12 @@ async function csvRows(conn,csv){
   if(d.stationCode&&!resolved.stationId)return {line:row.line,error:'STATION_NOT_ACTIVE',...d};
   if(d.sku&&skus.has(d.sku.toLowerCase()))return {line:row.line,error:'SKU_OR_BARCODE_DUPLICATE',...d};
   if(d.barcode&&barcodes.has(d.barcode.toLowerCase()))return {line:row.line,error:'SKU_OR_BARCODE_DUPLICATE',...d};
-  const checked=productSchema.safeParse({...resolved,imageUrl:'',lhdnTaxExemptionReason:'',lhdnProductTariffCode:'',lhdnCountryOfOriginCode:''});
+  if(d.lhdnCountryOfOriginCode&&!originCountryCodes.has(d.lhdnCountryOfOriginCode))return {line:row.line,error:'LHDN_COUNTRY_OF_ORIGIN_INVALID',...d};
+  const checked=productSchema.safeParse({...resolved,imageUrl:'',lhdnTaxExemptionReason:'',lhdnProductTariffCode:''});
   if(!checked.success)return {line:row.line,error:'PRODUCT_VALIDATION_FAILED',...d};
-  return {line:row.line,...d,data:checked.data};
+  const expectedLhdnTaxCode={NONE:'06',SALES_TAX:'01',SERVICE_TAX:'02'}[d.jkdmTaxType];
+  const review=d.lhdnTaxTypeCode!==expectedLhdnTaxCode?'LHDN_TAX_TYPE_REVIEW':(!d.lhdnClassificationExplicit||!d.lhdnUnitExplicit||!d.lhdnTaxTypeExplicit?'LHDN_DEFAULTS_SUGGESTED':'');
+  return {line:row.line,...d,review,data:checked.data};
  });
 }
 export async function previewProductsImport(req,res){if(!costAllowed(req))throw failure('COST_PERMISSION_REQUIRED',403);const {csv}=csvSchema.parse(req.body);const rows=await csvRows(req.auth.pool,csv);return res.json({rows:rows.map(({data,...r})=>r),valid:rows.every(r=>!r.error),count:rows.length});}

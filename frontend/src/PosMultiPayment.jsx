@@ -19,17 +19,32 @@ function imageData(file){
   const reader=new FileReader();reader.onload=()=>resolve({mimeType:file.type,base64:String(reader.result).split(',')[1]});reader.onerror=()=>reject(Error('Cannot read the payment evidence image.'));reader.readAsDataURL(file);
  });
 }
-export default function PosMultiPayment({current,preview,methods,stockIssues,discountCode,voucherCode,cashReceived,setCashReceived,paymentError,payCash,busy,onClose,onPaid,onDisplayMode,onShowDisplay,notify}){
+export default function PosMultiPayment({current,preview,methods,stockIssues,discountCode,voucherCode,setDiscountCode,setVoucherCode,cashReceived,setCashReceived,paymentError,payCash,busy,onClose,onPaid,onDisplayMode,onShowDisplay,notify}){
+ const [recovering,setRecovering]=useState(true);
  const [method,setMethod]=useState('CASH'),[attempt,setAttempt]=useState(null),[reference,setReference]=useState(''),[evidence,setEvidence]=useState(null),[evidenceName,setEvidenceName]=useState(''),[verified,setVerified]=useState(false),[error,setError]=useState(''),[working,setWorking]=useState(false);
- useEffect(()=>{void onDisplayMode?.('CASH');},[current?.draft?.id]);
+ useEffect(()=>{
+  let active=true;setRecovering(true);
+  (async()=>{try{
+   const response=await request(`/pos/drafts/${current.draft.id}/payments/resume`,{method:'POST',body:{}});
+   if(!active)return;
+   if(response.attempt){setAttempt(response.attempt);setMethod(response.attempt.methodCode);
+    setDiscountCode?.(response.attempt.discountCode||'');setVoucherCode?.(response.attempt.voucherCode||'');
+    void onDisplayMode?.(['DUITNOW_QR','EWALLET'].includes(response.attempt.methodCode)?'QR':'MANUAL',response.attempt.attemptId);
+   }else void onDisplayMode?.('CASH');
+  }catch(e){if(active)setError(`Cannot verify pending payments: ${e.message}`);}
+  finally{if(active)setRecovering(false);}})();
+  return()=>{active=false;};
+ },[current?.draft?.id]);
  const configurations=new Map(methods.map(m=>[m.method_code,m]));
  const active=Boolean(configurations.get(method)),isCash=method==='CASH',hasQr=['DUITNOW_QR','EWALLET'].includes(method);
- const disabled=Boolean(busy||working||stockIssues.length||discountCode.trim()||voucherCode.trim());
+ const hasReduction=Boolean(discountCode.trim()||voucherCode.trim());
+ const disabled=Boolean(busy||working||recovering||stockIssues.length||Boolean(error&&error.startsWith('Cannot verify pending payments:')));
  const total=String(preview?.bill?.total||'0.00');
- const canFinalize=Boolean(attempt&&reference.trim().length>=6&&evidence&&verified&&!disabled);
+ const canFinalize=Boolean(attempt&&String(attempt.expectedTotal)===total&&reference.trim().length>=6&&evidence&&verified&&!disabled);
  const reset=()=>{setAttempt(null);setReference('');setEvidence(null);setEvidenceName('');setVerified(false);setError('');};
  async function select(selected){
   if(!eligible(selected,configurations.get(selected)))return;
+  if(attempt){setError('Cancel the current pending payment (after verifying that no funds were received) before selecting another method.');return;}
   reset();setMethod(selected);
   if(selected==='CASH'){void onDisplayMode?.('CASH');return;}
   setWorking(true);
@@ -55,14 +70,22 @@ export default function PosMultiPayment({current,preview,methods,stockIssues,dis
   // Tokens are in URL fragments and never transmitted in the page request.
   window.open(url,'tpos-customer-display','width=980,height=740');
  }
+ async function cancelPending(){
+  if(!attempt||working)return;
+  if(!window.confirm('Confirm ONLY if no payment was received in the merchant account or terminal. Cancelling will release the reserved voucher. If the customer has paid, do not cancel—complete manual verification.'))return;
+  setWorking(true);setError('');
+  try{await request(`/pos/drafts/${current.draft.id}/payments/${attempt.attemptId}/cancel`,{method:'POST',body:{unpaidConfirmed:true}});
+   reset();setMethod('CASH');void onDisplayMode?.('CASH');notify?.('Unpaid payment attempt cancelled; reserved voucher released.');
+  }catch(e){setError(e.message);}finally{setWorking(false);}
+ }
  const settings=configurations.get(method);
- return <div className="overlay" onMouseDown={event=>{if(event.target===event.currentTarget&&!working&&!busy)onClose();}}>
+ return <div className="overlay" onMouseDown={event=>{if(event.target===event.currentTarget&&!working&&!busy&&!attempt)onClose();}}>
   <div className="dialog pos-payment-dialog pos-multi-payment" role="dialog" aria-modal="true" aria-label="POS Payment Methods">
-   <div className="dialog-head"><div><p className="eyebrow">POS / CHECKOUT</p><h2>Payment Methods</h2></div><button type="button" className="pos-icon-button" aria-label="Close payment" onClick={onClose} disabled={working||busy}><X size={18}/></button></div>
+   <div className="dialog-head"><div><p className="eyebrow">POS / CHECKOUT</p><h2>Payment Methods</h2></div><button type="button" className="pos-icon-button" aria-label="Close payment" onClick={onClose} disabled={working||busy||Boolean(attempt)}><X size={18}/></button></div>
    <div className="pos-payment-total"><small>Total</small><strong>{asMoney(total)}</strong></div>
    <p className="muted">Choose an active payment method for this branch.</p>
    <div className="pos-payment-methods" role="group" aria-label="Payment options">
-    {ALL_METHODS.map(([code,label])=>{const enabled=eligible(code,configurations.get(code));return <button key={code} type="button" className={`pos-pay-method ${method===code?'pos-pay-selected':''} ${enabled?'':'pos-pay-locked'}`} disabled={!enabled||disabled} title={!enabled?(code==='SARA_MYKASIH'?'Official MyKasih provider connection is required':'Enable and configure the method in Settings first'):label} onClick={()=>select(code)}><Wallet size={16}/>{label}{enabled?(method===code?<CheckCircle2 size={15}/>:null):<Lock size={15}/>}</button>;})}
+    {ALL_METHODS.map(([code,label])=>{const enabled=eligible(code,configurations.get(code))&&(!hasReduction||code==='CASH');return <button key={code} type="button" className={`pos-pay-method ${method===code?'pos-pay-selected':''} ${enabled?'':'pos-pay-locked'}`} disabled={!enabled||disabled} title={!enabled?(code==='SARA_MYKASIH'?'Official MyKasih provider connection is required':'Enable and configure the method in Settings first'):label} onClick={()=>select(code)}><Wallet size={16}/>{label}{enabled?(method===code?<CheckCircle2 size={15}/>:null):<Lock size={15}/>}</button>;})}
    </div>
    {isCash?<div className="pos-cash-entry"><label className="field"><span>Cash Received (RM)</span><input inputMode="decimal" aria-label="Cash Received (RM)" value={cashReceived} onChange={e=>setCashReceived(e.target.value)} disabled={disabled}/></label><div className="pos-cash-change"><span>Change (RM)</span><strong>{Number(cashReceived)>=Number(total)?asMoney(Number(cashReceived)-Number(total)):'—'}</strong></div></div>:
     <div className="pos-multi-verification">
@@ -70,6 +93,7 @@ export default function PosMultiPayment({current,preview,methods,stockIssues,dis
      {settings?.provider_name&&<p className="muted">Provider: {settings.provider_name}</p>}
      {settings?.provider_merchant_ref&&<p className="muted">Merchant / Account Reference: {settings.provider_merchant_ref}</p>}
      {settings?.provider_terminal_ref&&<p className="muted">Terminal ID: {settings.provider_terminal_ref}</p>}
+     {attempt&&String(attempt.expectedTotal)!==total&&<p className="pos-checkout-payment-error" role="alert">The pending payment amount differs from the current quote. Do not accept another payment. Verify the original payment and resolve the amount before completing.</p>}
      {attempt&&hasQr&&<div className="pos-multi-qr"><img src={apiUrl(`/pos/drafts/${current.draft.id}/payments/${attempt.attemptId}/qr-image`)} alt="Merchant Static QR configured by Owner"/><button type="button" className="outline" onClick={displayQr}><ExternalLink size={16}/> Show on Customer Display</button></div>}
      {attempt&&<>
       <p className="pos-payment-attempt-note">Attempt #{attempt.attemptId} · Pending manual verification · {asMoney(attempt.expectedTotal)}</p>
@@ -81,9 +105,9 @@ export default function PosMultiPayment({current,preview,methods,stockIssues,dis
     </div>
    }
    {stockIssues.length>0&&<div className="pos-checkout-stock-alert" role="alert">Stock must be available before the sale is posted. {stockIssues.slice(0,3).map(issue=>issue.productName).join(', ')}</div>}
-   {(discountCode.trim()||voucherCode.trim())&&<p className="pos-quote-error" role="alert">Discount / Voucher settlement is not yet connected to checkout. Remove the code before payment.</p>}
+   {hasReduction&&<p className="pos-multi-warning" role="status">Voucher / Discount is included in the payment amount. A pending QR/manual payment must be completed only after verifying the real merchant receipt.</p>}
    {(error||paymentError)&&<p className="pos-checkout-payment-error" role="alert">{error||paymentError}</p>}
-   <div className="dialog-actions"><button className="outline" type="button" disabled={busy||working} onClick={onClose}>Cancel</button>
+   <div className="dialog-actions">{attempt&&<button className="outline" type="button" disabled={busy||working} onClick={cancelPending}>Cancel Unpaid Attempt</button>}<button className="outline" type="button" disabled={busy||working||Boolean(attempt)} onClick={onClose}>Close</button>
     {isCash?<button type="button" className="primary" disabled={disabled||!active||!/^(?:0|[1-9]\d{0,9})(?:\.\d{1,2})?$/.test(cashReceived)||Number(cashReceived)<Number(total)} onClick={payCash}><Wallet size={18}/> Confirm Cash Payment</button>:<button type="button" className="primary" onClick={finalize} disabled={!canFinalize}><ShieldCheck size={18}/>{working?'Processing...':'Pay — Manually Verified'}</button>}
    </div>
    <small className="muted">SARA/MyKasih and automatic provider transactions require a certified provider connection. Static QR/manual transfer must never be treated as provider-verified.</small>

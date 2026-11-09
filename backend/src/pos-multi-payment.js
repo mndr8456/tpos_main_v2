@@ -1,3 +1,7 @@
+import {captureCheckoutVerifiedMappingEvidenceC42B} from './einvoice-verified-mapping-c42b.js';
+import {normalizedCodes,assertReduction,lockReductionMaster,reserveCheckoutVoucher,persistSaleReduction,persistPendingReduction,getPendingReduction,cancelPendingReduction,finalizePendingReduction} from './pos-reduction-settlement.js';
+import {captureCheckoutLineTaxEvidenceC42} from './einvoice-line-tax-evidence-c42.js';
+import {captureCheckoutSnapshotR13} from './einvoice-checkout-snapshot-r13.js';
 import {captureReceiptFooter} from './receipt-settings.js';
 // Tenant-scoped manually VERIFIED non-cash POS checkout.
 // External terminal approval is entered from a real physical receipt by the cashier;
@@ -59,18 +63,28 @@ export async function startNonCashPayment(req,res){
  if(!canPay(req))throw err('POS_MANUAL_CHECKOUT_FORBIDDEN',403);
  const draftId=num.parse(req.params.id),input=startBody.parse(req.body);
  if(!isManualMethod(input.methodCode))throw err('POS_OFFICIAL_PROVIDER_REQUIRED');
- if(input.discountCode||input.voucherCode)throw err('POS_CHECKOUT_DISCOUNT_VOUCHER_NOT_CONNECTED');
+ const codes=normalizedCodes(input);
  const conn=await req.auth.pool.getConnection();
  try{
   await conn.beginTransaction();
   const [[prev]]=await conn.execute('SELECT * FROM pos_payment_attempts WHERE request_key=? FOR UPDATE',[input.requestKey]);
   if(prev){
+   if(str(prev.cashier_user_id)!==str(req.auth.user.id))throw err('POS_PAYMENT_NOT_OWNED',403);
+   branchGuard(req,prev.branch_id);
    if(str(prev.draft_id)!==str(draftId)||prev.method_code!==input.methodCode||str(prev.expected_total)!==fmtSen(parseSen(input.expectedTotal))||Number(prev.draft_version)!==input.expectedVersion)throw err('POS_PAYMENT_REQUEST_KEY_CONFLICT');
    if(prev.status!=='PENDING')throw err('POS_PAYMENT_ATTEMPT_ALREADY_FINAL');
+   const reduction=await getPendingReduction(conn,prev.id);
+   if(codes.discountCode!==String(reduction?.discount_code||'')||codes.voucherCode!==String(reduction?.voucher_code||''))throw err('POS_PAYMENT_REQUEST_KEY_CONFLICT');
    const out=await exposeAttempt(conn,prev,req.auth.tenantId);await conn.commit();return res.set('Cache-Control','no-store').json(out);
   }
   const draft=await getDraft(conn,req,draftId);
   if(Number(draft.version)!==input.expectedVersion)throw err('POS_DRAFT_VERSION_CHANGED');
+  const [[pending]]=await conn.execute("SELECT id FROM pos_payment_attempts WHERE draft_id=? AND status='PENDING' LIMIT 1 FOR UPDATE",[draftId]);
+  if(pending)throw err('POS_PAYMENT_PENDING_CANCEL_FIRST');
+  if(codes.discountCode||codes.voucherCode){
+   const [[installed]]=await conn.execute("SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pos_payment_attempt_reductions'");
+   if(Number(installed?.n)!==1)throw err('POS_REDUCTION_MIGRATION_050_REQUIRED');
+  }
   if(draft.order_scope==='DINE_IN'&&!draft.table_id)throw err('POS_DINE_IN_TABLE_REQUIRED');
   const settings=await getSettings(conn,draft.branch_id,input.methodCode);
   const [lines]=await conn.execute('SELECT id FROM pos_draft_lines WHERE draft_id=? LIMIT 1',[draftId]);
@@ -86,11 +100,20 @@ export async function startNonCashPayment(req,res){
    try{inventoryIssue({quantity:str(balance.quantity_on_hand),carryingValue:str(balance.carrying_value)},Number(quantity).toFixed(2));}
    catch(e){throw err(e.message==='INVENTORY_INSUFFICIENT_STOCK'?'POS_INSUFFICIENT_STOCK':'POS_INVENTORY_ISSUE_FAILED');}
   }
-  const quote=await calculateDraftQuote(conn,req,draftId,{});
+  const master=await lockReductionMaster(conn,codes);
+  const quote=await calculateDraftQuote(conn,req,draftId,codes);
+  assertReduction(quote,codes);
   if(quote.bill.total!==fmtSen(parseSen(input.expectedTotal)))throw err('POS_CHECKOUT_TOTAL_CHANGED');
   if(parseSen(quote.bill.total)<=0n)throw err('POS_CHECKOUT_TOTAL_MUST_BE_POSITIVE');
   const mode=paymentManualMode(input.methodCode,settings);
   const [r]=await conn.execute('INSERT INTO pos_payment_attempts(request_key,draft_id,branch_id,shift_id,cashier_user_id,draft_version,method_code,verification_mode,expected_total) VALUES(?,?,?,?,?,?,?,?,?)',[input.requestKey,draft.id,draft.branch_id,draft.shift_id,req.auth.user.id,draft.version,input.methodCode,mode,quote.bill.total]);
+  if(codes.discountCode||codes.voucherCode){
+   const [rawLines]=await conn.execute('SELECT product_id,category_id,quantity,unit_price FROM pos_draft_lines WHERE draft_id=? ORDER BY id',[draftId]);
+   const saleLines=totalDraftLines(rawLines).lines;
+   const [[clock]]=codes.voucherCode?await conn.execute("SELECT DATE_FORMAT(UTC_TIMESTAMP(6),'%Y-%m-%d %H:%i:%s') AS now"):[[null]];
+   const reservationId=await reserveCheckoutVoucher(conn,{master,requestKey:input.requestKey,draft,saleLines,quote,userId:req.auth.user.id,now:clock?.now});
+   await persistPendingReduction(conn,{attemptId:r.insertId,master,reservationId,quote});
+  }
   await append(conn,r.insertId,req.auth.user.id,'START',{method:input.methodCode,mode,total:quote.bill.total});
   const out=await exposeAttempt(conn,{id:r.insertId,method_code:input.methodCode,verification_mode:mode,expected_total:quote.bill.total,status:'PENDING'},req.auth.tenantId);
   await conn.commit();return res.status(201).set('Cache-Control','no-store').json(out);
@@ -151,10 +174,15 @@ export async function completeManualPayment(req,res){
   if(Number(draft.version)!==Number(attempt.draft_version))throw err('POS_DRAFT_VERSION_CHANGED');
   if(draft.order_scope==='DINE_IN'&&!draft.table_id)throw err('POS_DINE_IN_TABLE_REQUIRED');
   await getSettings(conn,draft.branch_id,attempt.method_code);
-  const [rawLines]=await conn.execute('SELECT id,product_id,product_name,sku,quantity,unit_price,track_stock,product_type,category_id,unit_code FROM pos_draft_lines WHERE draft_id=? ORDER BY product_id FOR UPDATE',[draftId]);
+  const [rawLines]=await conn.execute('SELECT id,product_id,product_name,sku,quantity,unit_price,track_stock,product_type,category_id,unit_code FROM pos_draft_lines WHERE draft_id=? ORDER BY id FOR UPDATE',[draftId]);
   if(!rawLines.length)throw err('POS_EMPTY_ORDER');
   const subtotal=totalDraftLines(rawLines);
-  const quote=await calculateDraftQuote(conn,req,draftId,{});
+  const pendingReduction=await getPendingReduction(conn,attemptId);
+  const codes=normalizedCodes({discountCode:pendingReduction?.discount_code||'',voucherCode:pendingReduction?.voucher_code||''});
+  const master=await lockReductionMaster(conn,codes,{excludeAttemptId:attemptId});
+  const quote=await calculateDraftQuote(conn,req,draftId,codes,{excludeReservationId:pendingReduction?.voucher_reservation_id||null});
+  assertReduction(quote,codes);
+  if(pendingReduction&&(parseSen(quote.bill.discount)!==parseSen(pendingReduction.discount_amount)||parseSen(quote.bill.voucher)!==parseSen(pendingReduction.voucher_amount)))throw err('POS_PAYMENT_REDUCTION_CHANGED');
   if(quote.bill.total!==str(attempt.expected_total))throw err('POS_CHECKOUT_TOTAL_CHANGED');
   let cogs=0n;const issued=new Map();
   for(const line of rawLines){
@@ -187,6 +215,17 @@ export async function completeManualPayment(req,res){
     await conn.execute("INSERT INTO inventory_movements(request_key,request_hash,branch_id,product_id,movement_type,quantity_delta,value_delta,quantity_after,carrying_value_after,average_cost_after,reference,actor_user_id) VALUES(?,?,?,?,'POS_SALE',?,?,?,?,?,?,?)",[randomUUID(),hashMove,draft.branch_id,line.product_id,`-${Number(line.quantity).toFixed(2)}`,`-${movement.issuedCost}`,movement.quantity,movement.carryingValue,movement.averageCost,receiptNumber,req.auth.user.id]);
    }
   }
+  await persistSaleReduction(conn,{saleId,branchId:draft.branch_id,master,reservationId:pendingReduction?.voucher_reservation_id||null,quote,userId:req.auth.user.id});
+  if(pendingReduction)await finalizePendingReduction(conn,attemptId);
+  const adjustment={discount_amount:quote.bill.discount,voucher_amount:quote.bill.voucher};
+  if(pendingReduction){
+   await captureCheckoutSnapshotR13(conn,{saleId,rawLines,adjustment});
+   await captureCheckoutLineTaxEvidenceC42(conn,{saleId,quote,adjustment});
+  }else{
+   await captureCheckoutSnapshotR13(conn,{saleId,rawLines});
+   await captureCheckoutLineTaxEvidenceC42(conn,{saleId,quote});
+  }
+  await captureCheckoutVerifiedMappingEvidenceC42B(conn,{saleId});
   const [j]=await conn.execute("INSERT INTO accounting_journals(source_type,source_id,branch_id) VALUES('POS_NONCASH_SALE',?,?)",[saleId,draft.branch_id]);
   for(const l of journal)await conn.execute('INSERT INTO accounting_journal_lines(journal_id,account_code,debit,credit,description) VALUES(?,?,?,?,?)',[j.insertId,l.accountCode,l.debit,l.credit,l.description]);
   await conn.execute("UPDATE pos_drafts SET status='COMPLETED',version=version+1,updated_at=UTC_TIMESTAMP(6) WHERE id=? AND status='DRAFT'",[draftId]);
@@ -204,4 +243,41 @@ export async function getPaymentEvidence(req,res){
  if(!row||!row.evidence_data)throw err('POS_PAYMENT_EVIDENCE_NOT_FOUND',404);
  branchGuard(req,row.branch_id);
  return res.set({'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"}).type(row.evidence_mime).send(decryptPaymentEvidence(row.evidence_data));
+}
+
+// Recover existing PENDING attempt after reload without creating a second charge.
+export async function resumePendingManualPayment(req,res){
+ if(!canPay(req))throw err('POS_MANUAL_CHECKOUT_FORBIDDEN',403);
+ const draftId=num.parse(req.params.id),conn=await req.auth.pool.getConnection();
+ try{
+  await conn.beginTransaction();
+  await getDraft(conn,req,draftId);
+  const [rows]=await conn.execute("SELECT * FROM pos_payment_attempts WHERE draft_id=? AND status='PENDING' ORDER BY id DESC LIMIT 2 FOR UPDATE",[draftId]);
+  if(rows.length>1)throw err('POS_PAYMENT_MULTIPLE_PENDING_MANUAL_REVIEW');
+  const reduction=rows.length?await getPendingReduction(conn,rows[0].id):null;
+  const exposed=rows.length?await exposeAttempt(conn,rows[0],req.auth.tenantId):null;
+  const answer=exposed?{...exposed,discountCode:String(reduction?.discount_code||''),voucherCode:String(reduction?.voucher_code||'')}:null;
+  await conn.commit();return res.set('Cache-Control','no-store').json({attempt:answer});
+ }catch(e){await conn.rollback();throw e;}finally{conn.release();}
+}
+export async function cancelPendingManualPayment(req,res){
+ if(!canPay(req))throw err('POS_MANUAL_CHECKOUT_FORBIDDEN',403);
+ const draftId=num.parse(req.params.id),attemptId=num.parse(req.params.attemptId);
+ if(!req.body||req.body.unpaidConfirmed!==true)throw err('POS_PAYMENT_UNPAID_ATTESTATION_REQUIRED',409);
+ const conn=await req.auth.pool.getConnection();
+ try{
+  await conn.beginTransaction();
+  // Unpaid cancellation must remain possible even when the shift has since closed.
+  const [[draft]]=await conn.execute('SELECT id,branch_id,cashier_user_id,status FROM pos_drafts WHERE id=? FOR UPDATE',[draftId]);
+  if(!draft||str(draft.cashier_user_id)!==str(req.auth.user.id))throw err('POS_DRAFT_NOT_OWNED',403);
+  branchGuard(req,draft.branch_id);
+  const [[attempt]]=await conn.execute('SELECT * FROM pos_payment_attempts WHERE id=? AND draft_id=? FOR UPDATE',[attemptId,draftId]);
+  if(!attempt||attempt.status!=='PENDING'||attempt.sale_id!==null||attempt.verified_at!==null)throw err('POS_PAYMENT_NOT_PENDING');
+  if(str(attempt.cashier_user_id)!==str(req.auth.user.id)||str(attempt.branch_id)!==str(draft.branch_id))throw err('POS_PAYMENT_NOT_OWNED',403);
+  const [updated]=await conn.execute("UPDATE pos_payment_attempts SET status='CANCELLED',updated_at=UTC_TIMESTAMP(6) WHERE id=? AND status='PENDING' AND sale_id IS NULL",[attemptId]);
+  if(updated.affectedRows!==1)throw err('POS_PAYMENT_CONCURRENT_OR_DUPLICATE');
+  await cancelPendingReduction(conn,{attemptId,userId:req.auth.user.id,attempt});
+  await append(conn,attemptId,req.auth.user.id,'CANCEL',{reason:'OPERATOR_ATTESTED_UNPAID',method:attempt.method_code});
+  await conn.commit();return res.set('Cache-Control','no-store').json({message:'POS_UNPAID_ATTEMPT_CANCELLED'});
+ }catch(e){await conn.rollback();throw e;}finally{conn.release();}
 }

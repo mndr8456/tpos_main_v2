@@ -64,6 +64,8 @@ export function PosCashReceipt({receipt:r,printRef}){
   </div>
   <div className="pos-receipt-section pos-receipt-totals">
    <Line label="Subtotal" value={r.subtotal}/>
+   {Number(r.discountAmount)>0&&<Line label="Discount (−)" value={-Number(r.discountAmount)}/>}
+   {Number(r.voucherAmount)>0&&<Line label="Voucher (−)" value={-Number(r.voucherAmount)}/>}
    {showSalesTax&&<Line label={taxLabel('Sales Tax',r.salesTaxRate)} value={r.salesTax}/>}
    {showServiceTax&&<Line label={taxLabel('Service Tax',r.serviceTaxRate)} value={r.serviceTax}/>}
    {hasService&&<Line label={taxLabel('Service Charge',r.serviceChargeRate)} value={r.serviceCharge}/>}

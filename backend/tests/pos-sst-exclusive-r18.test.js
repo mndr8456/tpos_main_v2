@@ -53,6 +53,6 @@ test('SST OFF, mismatch and unregistered tax have no charge despite old flag',()
 test('Legacy field remains readable without schema migration; POS quote is backend-authoritative',()=>{
  assert.match(posQuote,/applySstPolicy\(item,sstSettings\)/);
  assert.match(posQuote,/readSstSettings\(conn\)/);
- assert.match(posQuote,/cashCheckoutAvailable:!query.discountCode&&!query.voucherCode/);
+ assert.match(posQuote,/cashCheckoutAvailable:\(!query.discountCode\|\|discount.eligible\)/);
  assert.match(readFileSync(new URL('../src/sst-policy.js',import.meta.url),'utf8'),/taxInclusive:false/);
 });

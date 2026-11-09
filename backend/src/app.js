@@ -1,3 +1,4 @@
+import {listEinvoiceProductMappings,confirmEinvoiceProductMapping,previewBulkEinvoiceProductMappings,confirmBulkEinvoiceProductMappings} from './einvoice-verified-mapping-c42b.js';
 import {issueEinvoiceRequest,publicRequestDetails,submitPublicRequest} from './einvoice-requests-r12.js';
 import {getReceiptSettings,saveReceiptSettings,getReceiptSettingsAudit} from './receipt-settings.js';
 import {getEinvoiceSettings,saveEinvoiceSettings,testEinvoiceConnection,getEinvoiceSettingsAudit} from './einvoice-settings.js';
@@ -32,7 +33,7 @@ import {previewBulkOpening,confirmBulkOpening} from './inventory-opening-bulk.js
 import {cashCheckout,getCashReceipt} from './pos-cash-checkout.js';
 import {customerDisplayAfterPos} from './customer-display-pos-events.js';
 import {customerDisplaySettings,updateCustomerDisplaySettings,uploadCustomerDisplayMedia,editCustomerDisplayMedia,removeCustomerDisplayMedia,ownerCustomerDisplayAsset,pairCustomerDisplay,publishCustomerDisplay,customerDisplayPaymentMode,customerDisplaySalePresentation,publicCustomerDisplayState,publicCustomerDisplayMedia} from './customer-display.js';
-import {startNonCashPayment,completeManualPayment,manualPaymentImage,publicCustomerDisplay,getPaymentEvidence} from './pos-multi-payment.js';
+import {startNonCashPayment,completeManualPayment,resumePendingManualPayment,cancelPendingManualPayment,manualPaymentImage,publicCustomerDisplay,getPaymentEvidence} from './pos-multi-payment.js';
 import {attendanceMeta,attendanceList,attendanceDetails,createAttendance,updateAttendance,approveAttendance,statusAttendance,attendanceAudit,attendanceTemplate,previewAttendanceImport,confirmAttendanceImport} from './attendances.js';
 import {attendanceClockToday,attendanceClockHistory,attendanceClockPunch,attendanceClockAdminMeta,addOfficeNetwork,disableOfficeNetwork,grantRemoteClock,revokeRemoteClock} from './attendance-clock.js';
 import {staffMeta,staffNextNumber,listStaff,getStaff,getMyStaff,createStaff,updateStaff,updateMyStaff,changeStaffStatus,staffAudit,staffImage,uploadStaffImage,removeStaffImage,staffCsvTemplate,previewStaffImport,confirmStaffImport} from './staff-profiles.js';
@@ -98,6 +99,10 @@ export function createApp(){
  app.get('/api/v2/einvoice/public/request/:token',publicRequestDetails);
  app.post('/api/v2/einvoice/public/request/:token',submitPublicRequest);
  app.post('/api/v2/einvoice/requests/issue/:saleId',authenticate,permitted('pos.view'),issueEinvoiceRequest);
+ app.get('/api/v2/einvoice/product-mappings',authenticate,permitted('einvoice_settings.view'),listEinvoiceProductMappings);
+ app.post('/api/v2/einvoice/product-mappings/bulk-preview',authenticate,permitted('einvoice_settings.manage'),previewBulkEinvoiceProductMappings);
+ app.post('/api/v2/einvoice/product-mappings/bulk-confirm',authenticate,permitted('einvoice_settings.manage'),confirmBulkEinvoiceProductMappings);
+ app.put('/api/v2/einvoice/product-mappings/:productId',authenticate,permitted('einvoice_settings.manage'),confirmEinvoiceProductMapping);
  app.get('/api/v2/einvoice-settings',authenticate,permitted('einvoice_settings.view'),getEinvoiceSettings);
  app.put('/api/v2/einvoice-settings',authenticate,permitted('einvoice_settings.manage'),saveEinvoiceSettings);
  app.post('/api/v2/einvoice-settings/test',authenticate,permitted('einvoice_settings.manage'),testEinvoiceConnection);
@@ -230,6 +235,8 @@ export function createApp(){
  app.patch('/api/v2/pos/drafts/:id/table',authenticate,permitted('pos.cart.manage'),customerDisplayAfterPos('cart'),assignPosTable);
  app.post('/api/v2/pos/drafts/:id/quote',authenticate,permitted('pos.view'),customerDisplayAfterPos('cart'),quotePosDraft);
  app.post('/api/v2/pos/drafts/:id/checkout/cash',authenticate,permitted('pos.checkout.cash'),customerDisplayAfterPos('sale'),cashCheckout);
+ app.post('/api/v2/pos/drafts/:id/payments/resume',authenticate,permitted('pos.checkout.manual'),resumePendingManualPayment);
+ app.post('/api/v2/pos/drafts/:id/payments/:attemptId/cancel',authenticate,permitted('pos.checkout.manual'),cancelPendingManualPayment);
  app.post('/api/v2/pos/drafts/:id/payments/start',authenticate,permitted('pos.checkout.manual'),customerDisplayAfterPos('attempt'),startNonCashPayment);
  app.post('/api/v2/pos/drafts/:id/payments/:attemptId/complete',authenticate,permitted('pos.checkout.manual'),customerDisplayAfterPos('sale'),completeManualPayment);
  app.get('/api/v2/pos/drafts/:id/payments/:attemptId/qr-image',authenticate,permitted('pos.view'),manualPaymentImage);

@@ -31,7 +31,7 @@ test('preflight uses exact hundredth integers for large quantities',()=>{
 test('POS payment modal names missing stock and retains inline backend errors',()=>{
  assert.match(pos,/findCheckoutStockBlockers\(currentLines,bootstrap\.stockLevels,branchId\)/);
  assert.match(payment,/stockIssues\.length>0&&<div className="pos-checkout-stock-alert" role="alert"/);
- assert.match(payment,/disabled=Boolean\(busy\|\|working\|\|stockIssues\.length/);
+ assert.match(payment,/disabled=Boolean\(busy\|\|working\|\|recovering\|\|stockIssues\.length/);
  assert.match(pos,/setPaymentError\(message\);notify\(message,true\)/);
 });
 test('backend remains authoritative: locks inventory and rejects missing stock',()=>{

@@ -9,6 +9,7 @@ const receiptFunction=src.slice(src.indexOf('async function receipt('),src.index
 function fixture(salesOn,serviceOn){
  const queries=[];
  const conn={async execute(sql){queries.push(sql);
+  if(sql.includes("TABLE_NAME='pos_sale_reductions'"))return [[{n:0}]];
   if(sql.includes('FROM pos_sales s JOIN branches'))return [[{id:1,posted_time:'2026-11-02 20:13:34',branch_name:'Main Branch',cashier_name:'Hakim bin Othman',order_scope:'TAKE_AWAY',subtotal:'10.03',total:'10.05',sales_tax:'0.00',service_tax:'0.00',service_charge:'0.00',rounding_adjustment:'0.02',cash_received:'20.00',cash_change:'9.95'}]];
   if(sql.includes('FROM pos_sale_lines'))return [[{product_name:'POS Checkout Test',quantity:'1.00',unit_price:'10.03',line_total:'10.03'}]];
   if(sql.includes('FROM pos_sale_receipt_footers'))return [[]];

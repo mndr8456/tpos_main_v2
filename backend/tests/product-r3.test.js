@@ -31,9 +31,9 @@ test('R3 import accepts R1 21-column and R2 25-column formats',()=>{
  }
 });
 test('R3 distinct JKDM SST fields roundtrip in CSV and template',()=>{
- assert.equal(PRODUCT_CSV_HEADERS.length,29);
- assert.match(productCsvTemplate(),/jkdm_tax_type,jkdm_tax_rate,jkdm_tax_inclusive,is_kpdn_controlled/);
- const data=csv(1).replace(',NONE,0.00,NO,\r\n',',SALES_TAX,10.00,YES,\r\n');
+ assert.equal(PRODUCT_CSV_HEADERS.length,30);
+ assert.match(productCsvTemplate(),/jkdm_tax_type,jkdm_tax_rate,jkdm_tax_inclusive,is_kpdn_controlled,lhdn_country_of_origin_code/);
+ const data=csv(1).replace(',NONE,0.00,NO,',',SALES_TAX,10.00,YES,');
  const [item]=parseProductCsv(data);
  assert.equal(item.data.jkdmTaxType,'SALES_TAX');
  assert.equal(item.data.jkdmTaxRate,'10.00');

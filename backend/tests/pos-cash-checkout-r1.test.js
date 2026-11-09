@@ -31,7 +31,9 @@ test('Cash checkout persistence is one transaction, idempotent, and restricted t
  assert.match(sql,/UNIQUE KEY uq_pos_sale_request\(request_key\)/);assert.match(sql,/UNIQUE KEY uq_pos_sale_draft\(draft_id\)/);
  assert.match(sql,/ENUM\('CASH'\)/);assert.doesNotMatch(sql,/DROP TABLE|TRUNCATE|DELETE FROM|tpos_v1_/i);
  assert.match(js,/await conn\.beginTransaction\(\)/);assert.match(js,/await conn\.rollback\(\)/);assert.match(js,/await conn\.commit\(\)/);
- assert.match(js,/POS_CASH_CHECKOUT_DISCOUNT_VOUCHER_NOT_CONNECTED/);
+ assert.match(js,/await persistSaleReduction\(conn,/);
+ assert.match(js,/assertReduction\(quote,codes\)/);
+ assert.doesNotMatch(js,/throw err\('POS_CASH_CHECKOUT_DISCOUNT_VOUCHER_NOT_CONNECTED'/);
  assert.match(js,/cashReceived/);assert.match(js,/POS_CHECKOUT_REQUEST_KEY_CONFLICT/);
  assert.match(js,/FOR UPDATE/);assert.match(js,/inventoryIssue\(/);assert.match(js,/makePosCashJournal\(/);
  assert.match(js,/UPDATE pos_drafts SET status='COMPLETED'/);

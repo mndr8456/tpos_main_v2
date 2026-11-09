@@ -1,0 +1,16 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {makeReductionAllocationPreviewC43A as preview,EINV_C43A_SUBMISSION_ENABLED,EINV_C43A_CHECKOUT_INTEGRATED} from '../src/einvoice-reduction-allocation-c43a.js';
+const lines=[{saleLineId:1,productId:10,lineTotal:'10.00'},{saleLineId:2,productId:20,lineTotal:'20.00'},{saleLineId:3,productId:30,lineTotal:'30.00'}];
+const bill=(discount='0.00',voucher='0.00')=>({subtotal:'60.00',discount,voucher});
+test('discount allocates exactly with deterministic largest remainder',()=>{const p=preview({lines,bill:bill('5.00')});assert.deepEqual(p.lines.map(l=>l.discount_amount),['0.83','1.67','2.50']);assert.equal(p.totals.post_reduction,'55.00');});
+test('voucher remains distinct and never invents discount',()=>{const p=preview({lines,bill:bill('0.00','3.00')});assert.deepEqual(p.lines.map(l=>l.voucher_amount),['0.50','1.00','1.50']);assert.ok(p.lines.every(l=>l.discount_amount==='0.00'));});
+test('no reduction keeps existing gross amounts',()=>{const p=preview({lines,bill:bill()});assert.deepEqual(p.lines.map(l=>l.post_reduction_base),['10.00','20.00','30.00']);});
+test('discount and voucher stacking is refused',()=>assert.throws(()=>preview({lines,bill:bill('1.00','1.00')}),/STACKING_NOT_APPROVED/));
+test('over allocation is refused',()=>assert.throws(()=>preview({lines,bill:bill('61.00')}),/REDUCTION_EXCEEDS_GROSS/));
+test('missing or mismatched gross fails closed',()=>assert.throws(()=>preview({lines,bill:{...bill(),subtotal:'60.01'}}),/GROSS_RECONCILIATION_FAILED/));
+test('duplicates fail closed',()=>assert.throws(()=>preview({lines:[lines[0],lines[0]],bill:bill()}),/INVALID_OR_DUPLICATE_LINE/));
+test('invalid money fails closed',()=>assert.throws(()=>preview({lines,bill:bill('1.001')}),/INVALID_MONEY/));
+test('preview is deterministic and explicitly not submission-ready',()=>{const a=preview({lines,bill:bill('1.01')});assert.equal(a.preview_sha256,preview({lines,bill:bill('1.01')}).preview_sha256);assert.equal(a.submission_ready,false);assert.equal(a.status,'CHECKOUT_INTEGRATION_REQUIRED');});
+test('no checkout or MyInvois capability is enabled',()=>{assert.equal(EINV_C43A_SUBMISSION_ENABLED,false);assert.equal(EINV_C43A_CHECKOUT_INTEGRATED,false);});
+test('tie pennies favor original line order',()=>{const p=preview({lines:[{saleLineId:1,productId:1,lineTotal:'1.00'},{saleLineId:2,productId:2,lineTotal:'1.00'},{saleLineId:3,productId:3,lineTotal:'1.00'}],bill:{subtotal:'3.00',discount:'0.01',voucher:'0.00'}});assert.deepEqual(p.lines.map(x=>x.discount_amount),['0.01','0.00','0.00']);});
