@@ -1,3 +1,4 @@
+import {getOfflineUblSchemaProfileC43R42} from './einvoice-ubl-schema-c43-r42.js';
 import {getInvoiceCandidateC43R3} from './einvoice-ubl-invoice-c43-r3.js';
 import {getSdkProfilePreviewC43R4} from './einvoice-sdk-profile-c43-r4.js';
 import {getOfflineUblRuleAuditC43R41} from './einvoice-ubl-offline-audit-c43-r41.js';
@@ -114,6 +115,7 @@ export function createApp(){
  app.get('/api/v2/einvoice/ubl-invoice-draft/:saleId',authenticate,permitted('einvoice_settings.view'),getInvoiceCandidateC43R3);
  app.get('/api/v2/einvoice/ubl-sdk-profile/:saleId',authenticate,permitted('einvoice_settings.view'),getSdkProfilePreviewC43R4);
  app.get('/api/v2/einvoice/ubl-offline-rules/:saleId',authenticate,permitted('einvoice_settings.view'),getOfflineUblRuleAuditC43R41);
+ app.get('/api/v2/einvoice/ubl-schema-profile/:saleId',authenticate,permitted('einvoice_settings.view'),getOfflineUblSchemaProfileC43R42);
  app.get('/api/v2/einvoice/product-mappings',authenticate,permitted('einvoice_settings.view'),listEinvoiceProductMappings);
  app.post('/api/v2/einvoice/product-mappings/bulk-preview',authenticate,permitted('einvoice_settings.manage'),previewBulkEinvoiceProductMappings);
  app.post('/api/v2/einvoice/product-mappings/bulk-confirm',authenticate,permitted('einvoice_settings.manage'),confirmBulkEinvoiceProductMappings);

@@ -1,0 +1,1457 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tpos.local/schemas/c43-r42-invoice-profile.json",
+  "title": "TPOS C4.3 R4.2 bounded UBL 2.1 Invoice 1.1 JSON profile (NON-NORMATIVE)",
+  "description": "Application-specific machine-readable profile, not the complete OASIS UBL 2.1 schema and not a substitute for MyInvois verification.",
+  "type": "object",
+  "properties": {
+    "_D": {
+      "const": "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+    },
+    "_A": {
+      "const": "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+    },
+    "_B": {
+      "const": "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
+    },
+    "Invoice": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "ID": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "_": {
+                  "type": "string",
+                  "pattern": "^.{1,50}$"
+                }
+              },
+              "required": [
+                "_"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "IssueDate": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "_": {
+                  "type": "string",
+                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                }
+              },
+              "required": [
+                "_"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "IssueTime": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "_": {
+                  "type": "string",
+                  "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+                }
+              },
+              "required": [
+                "_"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "InvoiceTypeCode": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "_": {
+                  "const": "01"
+                },
+                "listVersionID": {
+                  "const": "1.1"
+                }
+              },
+              "required": [
+                "_",
+                "listVersionID"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "DocumentCurrencyCode": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "_": {
+                  "type": "string",
+                  "pattern": "^MYR$"
+                }
+              },
+              "required": [
+                "_"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "AccountingSupplierParty": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "Party": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "PartyIdentification": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 8,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "ID": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 1,
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "_": {
+                                    "type": "string",
+                                    "pattern": "^.{1,100}$"
+                                  },
+                                  "schemeID": {
+                                    "enum": [
+                                      "TIN",
+                                      "BRN",
+                                      "NRIC",
+                                      "PASSPORT",
+                                      "ARMY",
+                                      "SST",
+                                      "TTX"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "_",
+                                  "schemeID"
+                                ],
+                                "additionalProperties": true
+                              }
+                            }
+                          },
+                          "required": [
+                            "ID"
+                          ],
+                          "additionalProperties": true
+                        }
+                      },
+                      "PartyLegalEntity": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 1,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "RegistrationName": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 1,
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "_": {
+                                    "type": "string",
+                                    "pattern": "^.{1,300}$"
+                                  }
+                                },
+                                "required": [
+                                  "_"
+                                ],
+                                "additionalProperties": true
+                              }
+                            }
+                          },
+                          "required": [
+                            "RegistrationName"
+                          ],
+                          "additionalProperties": true
+                        }
+                      },
+                      "PostalAddress": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 1,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "CityName": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 1,
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "_": {
+                                    "type": "string",
+                                    "pattern": "^.{1,50}$"
+                                  }
+                                },
+                                "required": [
+                                  "_"
+                                ],
+                                "additionalProperties": true
+                              }
+                            },
+                            "CountrySubentityCode": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 1,
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "_": {
+                                    "type": "string",
+                                    "pattern": "^(0[1-9]|1[0-7])$"
+                                  }
+                                },
+                                "required": [
+                                  "_"
+                                ],
+                                "additionalProperties": true
+                              }
+                            },
+                            "AddressLine": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 3,
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "Line": {
+                                    "type": "array",
+                                    "minItems": 1,
+                                    "maxItems": 1,
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "_": {
+                                          "type": "string",
+                                          "pattern": "^.{1,150}$"
+                                        }
+                                      },
+                                      "required": [
+                                        "_"
+                                      ],
+                                      "additionalProperties": true
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "Line"
+                                ],
+                                "additionalProperties": true
+                              }
+                            },
+                            "Country": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 1,
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "IdentificationCode": {
+                                    "type": "array",
+                                    "minItems": 1,
+                                    "maxItems": 1,
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "_": {
+                                          "type": "string",
+                                          "pattern": "^[A-Z]{3}$"
+                                        },
+                                        "listID": {
+                                          "const": "ISO3166-1"
+                                        },
+                                        "listAgencyID": {
+                                          "const": "6"
+                                        }
+                                      },
+                                      "required": [
+                                        "_",
+                                        "listID",
+                                        "listAgencyID"
+                                      ],
+                                      "additionalProperties": true
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "IdentificationCode"
+                                ],
+                                "additionalProperties": true
+                              }
+                            }
+                          },
+                          "required": [
+                            "CityName",
+                            "AddressLine",
+                            "Country"
+                          ],
+                          "additionalProperties": true
+                        }
+                      },
+                      "IndustryClassificationCode": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 1,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "_": {
+                              "type": "string",
+                              "pattern": "^[0-9]{5}$"
+                            },
+                            "name": {
+                              "type": "string",
+                              "pattern": "^.{1,300}$"
+                            }
+                          },
+                          "required": [
+                            "_",
+                            "name"
+                          ],
+                          "additionalProperties": true
+                        }
+                      }
+                    },
+                    "required": [
+                      "PartyIdentification",
+                      "PartyLegalEntity",
+                      "PostalAddress"
+                    ],
+                    "additionalProperties": true
+                  }
+                }
+              },
+              "required": [
+                "Party"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "AccountingCustomerParty": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "Party": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "PartyIdentification": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 8,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "ID": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 1,
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "_": {
+                                    "type": "string",
+                                    "pattern": "^.{1,100}$"
+                                  },
+                                  "schemeID": {
+                                    "enum": [
+                                      "TIN",
+                                      "BRN",
+                                      "NRIC",
+                                      "PASSPORT",
+                                      "ARMY",
+                                      "SST",
+                                      "TTX"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "_",
+                                  "schemeID"
+                                ],
+                                "additionalProperties": true
+                              }
+                            }
+                          },
+                          "required": [
+                            "ID"
+                          ],
+                          "additionalProperties": true
+                        }
+                      },
+                      "PartyLegalEntity": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 1,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "RegistrationName": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 1,
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "_": {
+                                    "type": "string",
+                                    "pattern": "^.{1,300}$"
+                                  }
+                                },
+                                "required": [
+                                  "_"
+                                ],
+                                "additionalProperties": true
+                              }
+                            }
+                          },
+                          "required": [
+                            "RegistrationName"
+                          ],
+                          "additionalProperties": true
+                        }
+                      },
+                      "PostalAddress": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 1,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "CityName": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 1,
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "_": {
+                                    "type": "string",
+                                    "pattern": "^.{1,50}$"
+                                  }
+                                },
+                                "required": [
+                                  "_"
+                                ],
+                                "additionalProperties": true
+                              }
+                            },
+                            "CountrySubentityCode": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 1,
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "_": {
+                                    "type": "string",
+                                    "pattern": "^(0[1-9]|1[0-7])$"
+                                  }
+                                },
+                                "required": [
+                                  "_"
+                                ],
+                                "additionalProperties": true
+                              }
+                            },
+                            "AddressLine": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 3,
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "Line": {
+                                    "type": "array",
+                                    "minItems": 1,
+                                    "maxItems": 1,
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "_": {
+                                          "type": "string",
+                                          "pattern": "^.{1,150}$"
+                                        }
+                                      },
+                                      "required": [
+                                        "_"
+                                      ],
+                                      "additionalProperties": true
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "Line"
+                                ],
+                                "additionalProperties": true
+                              }
+                            },
+                            "Country": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 1,
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "IdentificationCode": {
+                                    "type": "array",
+                                    "minItems": 1,
+                                    "maxItems": 1,
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "_": {
+                                          "type": "string",
+                                          "pattern": "^[A-Z]{3}$"
+                                        },
+                                        "listID": {
+                                          "const": "ISO3166-1"
+                                        },
+                                        "listAgencyID": {
+                                          "const": "6"
+                                        }
+                                      },
+                                      "required": [
+                                        "_",
+                                        "listID",
+                                        "listAgencyID"
+                                      ],
+                                      "additionalProperties": true
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "IdentificationCode"
+                                ],
+                                "additionalProperties": true
+                              }
+                            }
+                          },
+                          "required": [
+                            "CityName",
+                            "AddressLine",
+                            "Country"
+                          ],
+                          "additionalProperties": true
+                        }
+                      },
+                      "IndustryClassificationCode": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 1,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "_": {
+                              "type": "string",
+                              "pattern": "^[0-9]{5}$"
+                            },
+                            "name": {
+                              "type": "string",
+                              "pattern": "^.{1,300}$"
+                            }
+                          },
+                          "required": [
+                            "_",
+                            "name"
+                          ],
+                          "additionalProperties": true
+                        }
+                      }
+                    },
+                    "required": [
+                      "PartyIdentification",
+                      "PartyLegalEntity",
+                      "PostalAddress"
+                    ],
+                    "additionalProperties": true
+                  }
+                }
+              },
+              "required": [
+                "Party"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "TaxTotal": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "TaxAmount": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "_": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^-?(?:0|[1-9][0-9]{0,12})(?:\\.[0-9]{1,2})?$"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
+                      },
+                      "currencyID": {
+                        "const": "MYR"
+                      }
+                    },
+                    "required": [
+                      "_",
+                      "currencyID"
+                    ],
+                    "additionalProperties": true
+                  }
+                },
+                "TaxSubtotal": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "TaxableAmount": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 1,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "_": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^-?(?:0|[1-9][0-9]{0,12})(?:\\.[0-9]{1,2})?$"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "currencyID": {
+                              "const": "MYR"
+                            }
+                          },
+                          "required": [
+                            "_",
+                            "currencyID"
+                          ],
+                          "additionalProperties": true
+                        }
+                      },
+                      "TaxAmount": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 1,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "_": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^-?(?:0|[1-9][0-9]{0,12})(?:\\.[0-9]{1,2})?$"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "currencyID": {
+                              "const": "MYR"
+                            }
+                          },
+                          "required": [
+                            "_",
+                            "currencyID"
+                          ],
+                          "additionalProperties": true
+                        }
+                      },
+                      "TaxCategory": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 1,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "ID": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 1,
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "_": {
+                                    "type": "string",
+                                    "pattern": "^[0-9]{2}$"
+                                  }
+                                },
+                                "required": [
+                                  "_"
+                                ],
+                                "additionalProperties": true
+                              }
+                            },
+                            "TaxScheme": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 1,
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "ID": {
+                                    "type": "array",
+                                    "minItems": 1,
+                                    "maxItems": 1,
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "_": {
+                                          "const": "OTH"
+                                        },
+                                        "schemeID": {
+                                          "const": "UN/ECE 5153"
+                                        },
+                                        "schemeAgencyID": {
+                                          "const": "6"
+                                        }
+                                      },
+                                      "required": [
+                                        "_",
+                                        "schemeID",
+                                        "schemeAgencyID"
+                                      ],
+                                      "additionalProperties": true
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "ID"
+                                ],
+                                "additionalProperties": true
+                              }
+                            }
+                          },
+                          "required": [
+                            "ID",
+                            "TaxScheme"
+                          ],
+                          "additionalProperties": true
+                        }
+                      }
+                    },
+                    "required": [
+                      "TaxableAmount",
+                      "TaxAmount",
+                      "TaxCategory"
+                    ],
+                    "additionalProperties": true
+                  }
+                }
+              },
+              "required": [
+                "TaxAmount"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "LegalMonetaryTotal": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "LineExtensionAmount": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "_": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^-?(?:0|[1-9][0-9]{0,12})(?:\\.[0-9]{1,2})?$"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
+                      },
+                      "currencyID": {
+                        "const": "MYR"
+                      }
+                    },
+                    "required": [
+                      "_",
+                      "currencyID"
+                    ],
+                    "additionalProperties": true
+                  }
+                },
+                "TaxExclusiveAmount": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "_": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^-?(?:0|[1-9][0-9]{0,12})(?:\\.[0-9]{1,2})?$"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
+                      },
+                      "currencyID": {
+                        "const": "MYR"
+                      }
+                    },
+                    "required": [
+                      "_",
+                      "currencyID"
+                    ],
+                    "additionalProperties": true
+                  }
+                },
+                "TaxInclusiveAmount": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "_": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^-?(?:0|[1-9][0-9]{0,12})(?:\\.[0-9]{1,2})?$"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
+                      },
+                      "currencyID": {
+                        "const": "MYR"
+                      }
+                    },
+                    "required": [
+                      "_",
+                      "currencyID"
+                    ],
+                    "additionalProperties": true
+                  }
+                },
+                "PayableRoundingAmount": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "_": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^-?(?:0|[1-9][0-9]{0,12})(?:\\.[0-9]{1,2})?$"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
+                      },
+                      "currencyID": {
+                        "const": "MYR"
+                      }
+                    },
+                    "required": [
+                      "_",
+                      "currencyID"
+                    ],
+                    "additionalProperties": true
+                  }
+                },
+                "PayableAmount": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "_": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^-?(?:0|[1-9][0-9]{0,12})(?:\\.[0-9]{1,2})?$"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
+                      },
+                      "currencyID": {
+                        "const": "MYR"
+                      }
+                    },
+                    "required": [
+                      "_",
+                      "currencyID"
+                    ],
+                    "additionalProperties": true
+                  }
+                }
+              },
+              "required": [
+                "LineExtensionAmount",
+                "TaxExclusiveAmount",
+                "TaxInclusiveAmount",
+                "PayableAmount"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "InvoiceLine": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5000,
+            "items": {
+              "type": "object",
+              "properties": {
+                "ID": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "_": {
+                        "type": "string",
+                        "pattern": "^.{1,50}$"
+                      }
+                    },
+                    "required": [
+                      "_"
+                    ],
+                    "additionalProperties": true
+                  }
+                },
+                "InvoicedQuantity": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "_": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^(?:0|[1-9][0-9]{0,11})(?:\\.[0-9]{1,3})?$"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
+                      },
+                      "unitCode": {
+                        "type": "string",
+                        "pattern": "^[A-Z0-9]{2,3}$"
+                      }
+                    },
+                    "required": [
+                      "_",
+                      "unitCode"
+                    ],
+                    "additionalProperties": true
+                  }
+                },
+                "LineExtensionAmount": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "_": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^-?(?:0|[1-9][0-9]{0,12})(?:\\.[0-9]{1,2})?$"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
+                      },
+                      "currencyID": {
+                        "const": "MYR"
+                      }
+                    },
+                    "required": [
+                      "_",
+                      "currencyID"
+                    ],
+                    "additionalProperties": true
+                  }
+                },
+                "AllowanceCharge": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 100,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "ChargeIndicator": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 1,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "_": {
+                              "const": false
+                            }
+                          },
+                          "required": [
+                            "_"
+                          ],
+                          "additionalProperties": true
+                        }
+                      },
+                      "Amount": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 1,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "_": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^-?(?:0|[1-9][0-9]{0,12})(?:\\.[0-9]{1,2})?$"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "currencyID": {
+                              "const": "MYR"
+                            }
+                          },
+                          "required": [
+                            "_",
+                            "currencyID"
+                          ],
+                          "additionalProperties": true
+                        }
+                      }
+                    },
+                    "required": [
+                      "ChargeIndicator",
+                      "Amount"
+                    ],
+                    "additionalProperties": true
+                  }
+                },
+                "TaxTotal": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "TaxAmount": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 1,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "_": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^-?(?:0|[1-9][0-9]{0,12})(?:\\.[0-9]{1,2})?$"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "currencyID": {
+                              "const": "MYR"
+                            }
+                          },
+                          "required": [
+                            "_",
+                            "currencyID"
+                          ],
+                          "additionalProperties": true
+                        }
+                      },
+                      "TaxSubtotal": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 1,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "TaxableAmount": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 1,
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "_": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "pattern": "^-?(?:0|[1-9][0-9]{0,12})(?:\\.[0-9]{1,2})?$"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ]
+                                  },
+                                  "currencyID": {
+                                    "const": "MYR"
+                                  }
+                                },
+                                "required": [
+                                  "_",
+                                  "currencyID"
+                                ],
+                                "additionalProperties": true
+                              }
+                            },
+                            "TaxAmount": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 1,
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "_": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "pattern": "^-?(?:0|[1-9][0-9]{0,12})(?:\\.[0-9]{1,2})?$"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ]
+                                  },
+                                  "currencyID": {
+                                    "const": "MYR"
+                                  }
+                                },
+                                "required": [
+                                  "_",
+                                  "currencyID"
+                                ],
+                                "additionalProperties": true
+                              }
+                            },
+                            "TaxCategory": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 1,
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "ID": {
+                                    "type": "array",
+                                    "minItems": 1,
+                                    "maxItems": 1,
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "_": {
+                                          "type": "string",
+                                          "pattern": "^[0-9]{2}$"
+                                        }
+                                      },
+                                      "required": [
+                                        "_"
+                                      ],
+                                      "additionalProperties": true
+                                    }
+                                  },
+                                  "TaxScheme": {
+                                    "type": "array",
+                                    "minItems": 1,
+                                    "maxItems": 1,
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "ID": {
+                                          "type": "array",
+                                          "minItems": 1,
+                                          "maxItems": 1,
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "_": {
+                                                "const": "OTH"
+                                              },
+                                              "schemeID": {
+                                                "const": "UN/ECE 5153"
+                                              },
+                                              "schemeAgencyID": {
+                                                "const": "6"
+                                              }
+                                            },
+                                            "required": [
+                                              "_",
+                                              "schemeID",
+                                              "schemeAgencyID"
+                                            ],
+                                            "additionalProperties": true
+                                          }
+                                        }
+                                      },
+                                      "required": [
+                                        "ID"
+                                      ],
+                                      "additionalProperties": true
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "ID",
+                                  "TaxScheme"
+                                ],
+                                "additionalProperties": true
+                              }
+                            }
+                          },
+                          "required": [
+                            "TaxableAmount",
+                            "TaxAmount",
+                            "TaxCategory"
+                          ],
+                          "additionalProperties": true
+                        }
+                      }
+                    },
+                    "required": [
+                      "TaxAmount"
+                    ],
+                    "additionalProperties": true
+                  }
+                },
+                "Item": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "Description": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 1,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "_": {
+                              "type": "string",
+                              "pattern": "^.{1,300}$"
+                            }
+                          },
+                          "required": [
+                            "_"
+                          ],
+                          "additionalProperties": true
+                        }
+                      },
+                      "CommodityClassification": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 1,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "ItemClassificationCode": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 1,
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "_": {
+                                    "type": "string",
+                                    "pattern": "^[0-9]{3}$"
+                                  },
+                                  "listID": {
+                                    "type": "string",
+                                    "pattern": "^[A-Z0-9_]{1,20}$"
+                                  }
+                                },
+                                "required": [
+                                  "_",
+                                  "listID"
+                                ],
+                                "additionalProperties": true
+                              }
+                            }
+                          },
+                          "required": [
+                            "ItemClassificationCode"
+                          ],
+                          "additionalProperties": true
+                        }
+                      }
+                    },
+                    "required": [
+                      "Description",
+                      "CommodityClassification"
+                    ],
+                    "additionalProperties": true
+                  }
+                },
+                "Price": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "PriceAmount": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 1,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "_": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^-?(?:0|[1-9][0-9]{0,12})(?:\\.[0-9]{1,2})?$"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "currencyID": {
+                              "const": "MYR"
+                            }
+                          },
+                          "required": [
+                            "_",
+                            "currencyID"
+                          ],
+                          "additionalProperties": true
+                        }
+                      }
+                    },
+                    "required": [
+                      "PriceAmount"
+                    ],
+                    "additionalProperties": true
+                  }
+                }
+              },
+              "required": [
+                "ID",
+                "InvoicedQuantity",
+                "LineExtensionAmount",
+                "TaxTotal",
+                "Item",
+                "Price"
+              ],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "ID",
+          "IssueDate",
+          "IssueTime",
+          "InvoiceTypeCode",
+          "DocumentCurrencyCode",
+          "AccountingSupplierParty",
+          "AccountingCustomerParty",
+          "TaxTotal",
+          "LegalMonetaryTotal",
+          "InvoiceLine"
+        ],
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": [
+    "_D",
+    "_A",
+    "_B",
+    "Invoice"
+  ],
+  "additionalProperties": false
+}
