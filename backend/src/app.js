@@ -1,9 +1,14 @@
+import {getInvoiceCandidateC43R3} from './einvoice-ubl-invoice-c43-r3.js';
+import {getUblTreatmentPreviewC43R2} from './einvoice-ubl-treatment-c43-r2.js';
+import {getReductionDocumentEvidenceC43} from './einvoice-reduction-document-c43.js';
 import {previewTaxSync,confirmTaxSync} from './einvoice-tax-sync-r1.js';
 import {listEinvoiceProductMappings,confirmEinvoiceProductMapping,previewBulkEinvoiceProductMappings,confirmBulkEinvoiceProductMappings} from './einvoice-verified-mapping-c42b.js';
 import {issueEinvoiceRequest,publicRequestDetails,submitPublicRequest} from './einvoice-requests-r12.js';
 import {getReceiptSettings,saveReceiptSettings,getReceiptSettingsAudit} from './receipt-settings.js';
 import {getEinvoiceSettings,saveEinvoiceSettings,testEinvoiceConnection,getEinvoiceSettingsAudit} from './einvoice-settings.js';
 import {getCompanyProfile,updateCompanyProfile,getCompanyProfileAudit} from './company-profile.js';
+import {getSupplierMetadataC431,saveSupplierMetadataC431} from './einvoice-supplier-metadata-c431.js';
+import {listMsicCodesC432} from './einvoice-msic-c432.js';
 import {getRolePermissions,updateRolePermissions,getRolePermissionAudit,rolePermissionReader,rolePermissionEditor} from './role-permissions.js';
 import express from 'express';
 import helmet from 'helmet';
@@ -102,6 +107,9 @@ export function createApp(){
  app.post('/api/v2/einvoice/requests/issue/:saleId',authenticate,permitted('pos.view'),issueEinvoiceRequest);
  app.post('/api/v2/einvoice/product-mappings/tax-sync-preview',authenticate,permitted('einvoice_settings.manage'),previewTaxSync);
  app.post('/api/v2/einvoice/product-mappings/tax-sync-confirm',authenticate,permitted('einvoice_settings.manage'),confirmTaxSync);
+ app.get('/api/v2/einvoice/reduction-evidence/:saleId',authenticate,permitted('einvoice_settings.view'),getReductionDocumentEvidenceC43);
+ app.get('/api/v2/einvoice/ubl-treatment-preview/:saleId',authenticate,permitted('einvoice_settings.view'),getUblTreatmentPreviewC43R2);
+ app.get('/api/v2/einvoice/ubl-invoice-draft/:saleId',authenticate,permitted('einvoice_settings.view'),getInvoiceCandidateC43R3);
  app.get('/api/v2/einvoice/product-mappings',authenticate,permitted('einvoice_settings.view'),listEinvoiceProductMappings);
  app.post('/api/v2/einvoice/product-mappings/bulk-preview',authenticate,permitted('einvoice_settings.manage'),previewBulkEinvoiceProductMappings);
  app.post('/api/v2/einvoice/product-mappings/bulk-confirm',authenticate,permitted('einvoice_settings.manage'),confirmBulkEinvoiceProductMappings);
@@ -113,6 +121,9 @@ export function createApp(){
  app.get('/api/v2/receipt-settings',authenticate,permitted('receipt_settings.view'),getReceiptSettings);
  app.put('/api/v2/receipt-settings',authenticate,permitted('receipt_settings.manage'),saveReceiptSettings);
  app.get('/api/v2/receipt-settings/audit',authenticate,permitted('receipt_settings.audit'),getReceiptSettingsAudit);
+ app.get('/api/v2/company-profile/einvoice-supplier/msic-codes',authenticate,permitted('company_profile.view'),listMsicCodesC432);
+ app.get('/api/v2/company-profile/einvoice-supplier',authenticate,permitted('company_profile.view'),getSupplierMetadataC431);
+ app.put('/api/v2/company-profile/einvoice-supplier',authenticate,permitted('company_profile.manage'),saveSupplierMetadataC431);
  app.get('/api/v2/company-profile',authenticate,permitted('company_profile.view'),getCompanyProfile);
  app.put('/api/v2/company-profile',authenticate,permitted('company_profile.manage'),updateCompanyProfile);
  app.get('/api/v2/company-profile/audit',authenticate,permitted('company_profile.audit'),getCompanyProfileAudit);

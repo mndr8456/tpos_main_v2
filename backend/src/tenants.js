@@ -89,6 +89,7 @@ export async function registerTenant(request,response) {
   await executeSchema(dbName,'048_tenant_einvoice_line_tax_evidence.sql');
   await executeSchema(dbName,'049_tenant_einvoice_verified_mapping.sql');
   await executeSchema(dbName,'050_tenant_pos_reduction_settlement.sql');
+  await executeSchema(dbName,'051_tenant_einvoice_supplier_metadata.sql');
   const userId=await seedProfile({id},data,passwordHash);
   await cp.execute('INSERT INTO login_directory(email,tenant_id,tenant_user_id) VALUES(?,?,?)',[data.ownerEmail,id,userId]);
   await cp.execute(`UPDATE tenants SET status='ACTIVE',activated_at=UTC_TIMESTAMP(6) WHERE id=?`,[id]);

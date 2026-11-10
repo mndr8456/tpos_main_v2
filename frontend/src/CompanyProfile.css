@@ -1,2 +1,33 @@
 .company-profile-page{max-width:1150px}.company-profile-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:20px;flex-wrap:wrap}.company-profile-top h1{display:flex;gap:12px;align-items:center;margin:8px 0}.company-profile-top p{color:#66809b;margin:0}.company-profile-actions{display:flex;gap:10px;flex-wrap:wrap}.company-profile-actions button{display:flex;align-items:center;gap:7px}.company-profile-card{background:#fff;border:1px solid #dce6f1;border-radius:15px;padding:23px;display:grid;gap:20px}.company-profile-section-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.company-profile-section-head h2{margin:0;font-size:19px}.company-profile-section-head span{font-size:12px;color:#67809c}.company-profile-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px 18px}.company-profile-grid label{display:grid;gap:7px;color:#2c4c6f;font-size:12px;font-weight:700}.company-profile-grid input,.company-profile-grid select{width:100%;height:42px;border:1px solid #cbd9e8;border-radius:9px;padding:10px 12px;background:white;color:#183b62;font-size:14px}.company-profile-grid input:disabled,.company-profile-grid select:disabled{color:#64748b;background:#f2f5f9}.company-profile-grid input:focus,.company-profile-grid select:focus{outline:2px solid #80abed;outline-offset:1px}.company-profile-notice{display:flex;gap:9px;align-items:flex-start;border:1px solid #d8e6f4;background:#f4f8fd;border-radius:10px;padding:12px;font-size:12px;color:#365879;line-height:1.6}.company-profile-notice svg{flex-shrink:0}.company-profile-footer{border-top:1px solid #e5eaf1;padding-top:16px;display:flex;justify-content:space-between;align-items:center;gap:15px}.company-profile-footer p{font-size:12px;color:#67809c;max-width:620px;margin:0;line-height:1.6}.company-profile-footer button{display:flex;align-items:center;gap:8px;white-space:nowrap}.company-profile-audit{max-height:85vh;overflow:auto}@media(max-width:650px){.company-profile-grid{grid-template-columns:1fr}.company-profile-footer{flex-direction:column;align-items:stretch}.company-profile-card{padding:15px}}/* R1.2: compact Save button at every viewport size. */
 .company-profile-footer button.primary{width:max-content;max-width:100%;align-self:flex-end}
+
+/* C4.3 R3.1: isolated supplier metadata form; approved main form remains unchanged. */
+.company-profile-einvoice-card{margin-top:18px}
+
+/* C4.3 R3.2: searchable official MSIC reference; isolated from approved identity form. */
+.company-profile-msic-field{display:grid;gap:7px;min-width:0;position:relative;color:#2c4c6f;font-size:12px;font-weight:700}
+.company-profile-msic-field label{display:block}
+.company-profile-msic-field input{width:100%;height:42px;border:1px solid #cbd9e8;border-radius:9px;padding:10px 12px;background:white;color:#183b62;font-size:14px}
+.company-profile-msic-field input:focus{outline:2px solid #80abed;outline-offset:1px}
+.company-profile-msic-selected{font-size:12px;font-weight:500;color:#365879;overflow-wrap:anywhere}
+.company-profile-msic-results{max-height:260px;overflow-y:auto;border:1px solid #b8cbe2;border-radius:9px;background:#fff;box-shadow:0 6px 18px #17355a1c;padding:4px;display:grid;gap:2px}
+.company-profile-msic-option{width:100%;border:none;background:transparent;padding:9px 11px;text-align:left;cursor:pointer;color:#183b62;display:flex;gap:9px;align-items:flex-start;white-space:normal}
+.company-profile-msic-option:hover,.company-profile-msic-option[aria-selected=true]{background:#eef5ff;border-radius:6px}
+.company-profile-msic-option strong{font-variant-numeric:tabular-nums;flex-shrink:0}
+.company-profile-msic-option span{font-weight:400}
+.company-profile-msic-field small{font-weight:400;color:#66809b;line-height:1.5}
+.company-profile-msic-close{width:max-content;font-size:12px}
+
+
+/* C4.3 R3.2.4 — Supplier MSIC / Business Activity field alignment only.
+   The MSIC column has additional selection/help text, so the shorter right
+   label must NOT stretch to match that height (which pushes its input down). */
+.company-profile-einvoice-card .company-profile-grid{align-items:start}
+.company-profile-einvoice-card .company-profile-grid > label{
+  min-width:0;align-self:start;align-content:start;grid-template-rows:auto 42px
+}
+.company-profile-einvoice-card .company-profile-msic-field{
+  min-width:0;align-self:start;align-content:start
+}
+.company-profile-einvoice-card .company-profile-grid > label input,
+.company-profile-einvoice-card .company-profile-grid > label select{min-width:0}
