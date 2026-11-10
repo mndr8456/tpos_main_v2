@@ -1,3 +1,7 @@
+import {sandboxPreflightC43R46,sandboxSubmitC43R46,sandboxStatusC43R46,sandboxInvalidDetailsC43R46} from './einvoice-sandbox-c43-r46.js';
+import {getLocalUblXsdValidationC43R44} from './einvoice-ubl-xsd-c43-r44.js';
+import {getMyInvoisOfflineBusinessAuditC43R45} from './einvoice-sdk-business-c43-r45.js';
+import {getNormativeCompatibilityC43R43} from './einvoice-ubl-normative-audit-c43-r43.js';
 import {getOfflineUblSchemaProfileC43R42} from './einvoice-ubl-schema-c43-r42.js';
 import {getInvoiceCandidateC43R3} from './einvoice-ubl-invoice-c43-r3.js';
 import {getSdkProfilePreviewC43R4} from './einvoice-sdk-profile-c43-r4.js';
@@ -116,6 +120,14 @@ export function createApp(){
  app.get('/api/v2/einvoice/ubl-sdk-profile/:saleId',authenticate,permitted('einvoice_settings.view'),getSdkProfilePreviewC43R4);
  app.get('/api/v2/einvoice/ubl-offline-rules/:saleId',authenticate,permitted('einvoice_settings.view'),getOfflineUblRuleAuditC43R41);
  app.get('/api/v2/einvoice/ubl-schema-profile/:saleId',authenticate,permitted('einvoice_settings.view'),getOfflineUblSchemaProfileC43R42);
+ app.get('/api/v2/einvoice/ubl-normative-compatibility/:saleId',authenticate,permitted('einvoice_settings.view'),getNormativeCompatibilityC43R43);
+ app.get('/api/v2/einvoice/ubl-xsd-validation/:saleId',authenticate,permitted('einvoice_settings.view'),getLocalUblXsdValidationC43R44);
+ app.get('/api/v2/einvoice/sdk-business-audit/:saleId',authenticate,permitted('einvoice_settings.view'),getMyInvoisOfflineBusinessAuditC43R45);
+ app.get('/api/v2/einvoice/sandbox/preflight/:saleId',authenticate,permitted('einvoice_documents.submit'),sandboxPreflightC43R46);
+ app.post('/api/v2/einvoice/sandbox/submit/:saleId',authenticate,permitted('einvoice_documents.submit'),sandboxSubmitC43R46);
+ app.get('/api/v2/einvoice/sandbox/status/:saleId',authenticate,permitted('einvoice_documents.view'),sandboxStatusC43R46);
+ app.post('/api/v2/einvoice/sandbox/status/:saleId/refresh',authenticate,permitted('einvoice_documents.submit'),sandboxStatusC43R46);
+ app.get('/api/v2/einvoice/sandbox/invalid-details/:saleId',authenticate,permitted('einvoice_documents.view'),sandboxInvalidDetailsC43R46);
  app.get('/api/v2/einvoice/product-mappings',authenticate,permitted('einvoice_settings.view'),listEinvoiceProductMappings);
  app.post('/api/v2/einvoice/product-mappings/bulk-preview',authenticate,permitted('einvoice_settings.manage'),previewBulkEinvoiceProductMappings);
  app.post('/api/v2/einvoice/product-mappings/bulk-confirm',authenticate,permitted('einvoice_settings.manage'),confirmBulkEinvoiceProductMappings);
