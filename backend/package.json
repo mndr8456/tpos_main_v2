@@ -51,6 +51,7 @@
     "db:receipt-settings": "node scripts/setup-receipt-settings.js",
     "db:einvoice-settings": "node scripts/setup-einvoice-settings.js",
     "db:einvoice:requests": "node scripts/setup-einvoice-requests.js",
+    "db:einvoice:sandbox-v10": "node scripts/setup-einvoice-sandbox-v10.js",
     "db:einvoice:documents": "node scripts/setup-einvoice-document-foundation.js",
     "db:einvoice:checkout-snapshot": "node scripts/setup-einvoice-checkout-snapshot.js",
     "db:einvoice:line-tax-evidence": "node scripts/setup-einvoice-line-tax-evidence.js",

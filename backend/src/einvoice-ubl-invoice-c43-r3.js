@@ -75,7 +75,7 @@ export function validateInvoiceCandidateC43R3(doc){
  if(x.cac_InvoiceLine.some(l=>!l.cbc_ID?.length||!l.cbc_InvoicedQuantity?.[0]?.unitCode||!l.cac_Item?.[0]?.cac_CommodityClassification?.[0]?.cbc_ItemClassificationCode?.[0]?._||!l.cac_TaxTotal?.[0]?.cac_TaxSubtotal?.length||!l.cac_Price?.[0]?.cbc_PriceAmount?.length))return {ok:false,code:'LINE'};
  return {ok:true,code:'LOCAL_STRUCTURE_ONLY'};
 }
-export async function getInvoiceCandidateC43R3(req,res){
+export async function loadInvoiceCandidateC43R3(req,{issueTimestamp}={}){
  if(!['OWNER','ADMIN'].includes(req.auth?.user?.role_code)||!req.auth?.user?.permissions?.includes('einvoice_settings.view'))throw F('FORBIDDEN',403);
  const evidence=await loadReductionDocumentEvidenceC43(req);
  const financial=previewUblTreatmentC43R2(evidence);
@@ -87,7 +87,12 @@ export async function getInvoiceCandidateC43R3(req,res){
   const [[buyerRow]]=await conn.execute("SELECT buyer_cipher FROM einvoice_customer_requests WHERE sale_id=? AND status='REQUESTED' LIMIT 1",[evidence.saleId]);
   const buyer=buyerRow?.buyer_cipher?JSON.parse(decryptCredential(buyerRow.buyer_cipher)):null;
   const supplier=person?{...person,identificationType:'BRN',country:person.country==='MY'?'MYS':person.country}:null;
-  const result=buildInvoiceCandidateC43R3({evidence,financial,checkout:typeof checkoutRow?.doc==='string'?JSON.parse(checkoutRow.doc):checkoutRow?.doc,mapping:typeof mappingRow?.doc==='string'?JSON.parse(mappingRow.doc):mappingRow?.doc,supplier,buyer:buyer?{...buyer,name:buyer.buyerName}:null,issueTimestamp:new Date().toISOString().replace(/\.\d{3}Z$/,'Z')});
-  return res.set({'Cache-Control':'no-store','Pragma':'no-cache'}).json(result);
+  const result=buildInvoiceCandidateC43R3({evidence,financial,checkout:typeof checkoutRow?.doc==='string'?JSON.parse(checkoutRow.doc):checkoutRow?.doc,mapping:typeof mappingRow?.doc==='string'?JSON.parse(mappingRow.doc):mappingRow?.doc,supplier,buyer:buyer?{...buyer,name:buyer.buyerName}:null,issueTimestamp:issueTimestamp||new Date().toISOString().replace(/\.\d{3}Z$/,'Z')});
+  return result;
  }finally{conn.release();}
+}
+
+export async function getInvoiceCandidateC43R3(req,res){
+ const result=await loadInvoiceCandidateC43R3(req);
+ return res.set({'Cache-Control':'no-store','Pragma':'no-cache'}).json(result);
 }
